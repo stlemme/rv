@@ -23,3 +23,6 @@ include_directories(${LLVM_INCLUDE_DIRS})
 # libRV
 add_subdirectory(rv)
 
+# rvTool
+add_subdirectory(tools)
+
