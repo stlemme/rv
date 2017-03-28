@@ -23,3 +23,4 @@ bin/**
 clang_complete
 
 amd/*
+build*
