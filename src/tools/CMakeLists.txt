@@ -11,9 +11,7 @@ ELSE ()
 ENDIF ()
 
 add_executable(rvTool rvTool.cpp rvTool.h ArgumentReader.h)
-
-llvm_map_components_to_libnames(LLVM_LIBRARIES analysis irreader support core transformutils)
-target_link_libraries(rvTool ${LLVM_LIBRARIES} RV)
+target_link_libraries(rvTool RV)
 
 # install
 #INSTALL( TARGETS ${RVTOOL_NAME} RUNTIME DESTINATION bin )
