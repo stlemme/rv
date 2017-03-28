@@ -1,34 +1,11 @@
 # SET ( SLEEF_LIB_PATH "${CMAKE_BINARY_DIR}/rvlib.bc" CACHE FILEPATH "Wfv libary path" )
-SET ( RV_SLEEF_BC_DIR "${PROJ_ROOT_DIR}/sleefsrc" )
+# SET ( RV_SLEEF_BC_DIR "${PROJ_ROOT_DIR}/sleefsrc" )
 # SET ( RV_LIB_MATH_DIR "${RV_LIB_DIR}/mathfun" )
 
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -D_DEBUG")
-
-add_definitions(${LLVM_DEFINITIONS})
-
 # setup additional lib definition
-ADD_DEFINITIONS ( "-DRV_SLEEF_BC_DIR=\"${RV_SLEEF_BC_DIR}\"" )
-
-if(ENABLE_ASAN)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address")
-endif()
-
-# this defaults to no-rtti builds, if this flag is not available
-if(LLVM_ENABLE_RTTI)
-    add_definitions("-frtti")
-else()
-    add_definitions("-fno-rtti")
-endif()
-
-# enable c++11
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -Wall -Wpedantic" )
-
-# SET ( RV_GLOBAL_INCLUDES "${PROJ_ROOT_DIR}/include" )
-# FILE ( GLOB RV_GLOBAL_INCLUDE_FILES "${RV_GLOBAL_INCLUDES}/rv/**/*.h" )
+add_definitions("-DRV_SLEEF_BC_DIR=\"${RV_SLEEF_BC_DIR}\"")
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-# INCLUDE_DIRECTORIES ( ${RV_GLOBAL_INCLUDES} )
-include_directories(${LLVM_INCLUDE_DIRS})
 
 # get source files
 FILE ( GLOB NATIVE_CPP          native/*.cpp )

@@ -20,10 +20,6 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 find_package(LLVM 3.8 CONFIG REQUIRED)
 
-if(ENABLE_ASAN)
-    message(STATUS "-- Building with AddressSanitzer (ENABLE_ASAN)")
-endif()
-
 set(LLVM_PLATFORM_TOOLS_PATH ${LLVM_TOOLS_BINARY_DIR})
 # FIND_PATH ( LLVM_PLATFORM_TOOLS_PATH NAMES clang clang.exe PATHS ${LLVM_TOOLS_BINARY_DIR} ${LLVM_TOOLS_BINARY_DIR}/Debug ${LLVM_TOOLS_BINARY_DIR}/Release )
 message(STATUS "LLVM Tools path found: ${LLVM_PLATFORM_TOOLS_PATH}")
@@ -43,7 +39,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 add_subdirectory(src)
 
 # rvTool
-# add_subdirectory(tools)
+#add_subdirectory(tools)
 
 export(TARGETS RV FILE ${CMAKE_BINARY_DIR}/share/RV/cmake/rv-exports.cmake)
 # configure_file(cmake/impala-config.cmake.in ${CMAKE_BINARY_DIR}/share/impala/cmake/impala-config.cmake @ONLY)
