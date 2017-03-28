@@ -41,7 +41,7 @@ add_subdirectory(src)
 # rvTool
 #add_subdirectory(tools)
 
-export(TARGETS RV FILE ${CMAKE_BINARY_DIR}/share/RV/cmake/rv-exports.cmake)
+export(TARGETS rvTool RV FILE ${CMAKE_BINARY_DIR}/share/RV/cmake/rv-exports.cmake)
 # configure_file(cmake/impala-config.cmake.in ${CMAKE_BINARY_DIR}/share/impala/cmake/impala-config.cmake @ONLY)
 
 # if (BUILD_TESTING)
