@@ -8,15 +8,49 @@ add_definitions("-DRV_SLEEF_BC_DIR=\"${RV_SLEEF_BC_DIR}\"")
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
 # get source files
-FILE ( GLOB NATIVE_CPP          native/*.cpp )
-FILE ( GLOB CPP_GLOBAL          *.cpp )
-FILE ( GLOB CPP_UTILS           utils/*.cpp )
-FILE ( GLOB CPP_ANALYSIS        analysis/*.cpp )
-FILE ( GLOB REGIONS             region/*.cpp )
-FILE ( GLOB TRANSFORMS          transform/*.cpp )
-FILE ( GLOB OPT_PASSES pass/*.cpp )
+set(RV_SOURCE_FILES
+    PlatformInfo.cpp
+    rvConfig.cpp
+    rvConfig.h
+    rv.cpp
+    sleefLibrary.cpp
+    vectorizationInfo.cpp
+    VectorizationInfoProxyPass.cpp
+    vectorMapping.cpp
+    vectorShape.cpp
 
-SET ( RV_SOURCE_FILES ${CPP_GLOBAL} ${CPP_UTILS} ${CPP_ANALYSIS} ${REGIONS} ${NATIVE_CPP} ${OPT_PASSES} ${TRANSFORMS} )
+    analysis/ABAAnalysis.cpp
+    analysis/BranchDependenceAnalysis.cpp
+    analysis/DFG.cpp
+    analysis/MandatoryAnalysis.cpp
+    analysis/maskAnalysis.cpp
+    analysis/reductionAnalysis.cpp
+    analysis/VectorizationAnalysis.cpp
+
+    native/MemoryAccessGrouper.cpp
+    native/MemoryAccessGrouper.h
+    native/NatBuilder.cpp
+    native/NatBuilder.h
+    native/nativeBackendPass.cpp
+    native/nativeBackendPass.h
+    native/ShuffleBuilder.cpp
+    native/ShuffleBuilder.h
+    native/Utils.cpp
+    native/Utils.h
+
+    region/LoopRegion.cpp
+    region/Region.cpp
+
+    transform/Linearizer.cpp
+    transform/loopExitCanonicalizer.cpp
+    transform/maskGenerator.cpp
+    transform/structOpt.cpp
+
+    utils/maskGraphUtils.cpp
+    utils/rvTools.cpp
+    utils/rvTools.h
+    utils/stringUtils.h
+)
 
 # create libRV
 add_library(RV ${RV_SOURCE_FILES})
