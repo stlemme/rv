@@ -53,8 +53,8 @@ static const char CONTCHAR = 'C';
 static const char STRIDEDCHAR = 'S';
 static const char VARCHAR = 'T';
 
-static void
-fail(const char * errMsg = nullptr) __attribute__((noreturn));
+[[noreturn]] static void
+fail(const char * errMsg = nullptr);
 
 static void
 fail(const char * errMsg) {
