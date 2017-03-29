@@ -313,7 +313,7 @@ namespace rv {
     BlockIndex blockIndex;
     void addToBlockIndex(llvm::BasicBlock & block);
 
-    inline bool hasIndex(const llvm::BasicBlock & block) const { return blockIndex.count(&block); }
+    inline bool hasIndex(const llvm::BasicBlock & block) const { return blockIndex.count(&block) != 0; }
     inline int getIndex(const llvm::BasicBlock & block) const { return blockIndex.at(&block); }
     /// the highest index of @block s predecessors
     int getLeastIndex(const BasicBlock & block) const;
@@ -348,7 +348,7 @@ namespace rv {
     PHINode & createRepairPhi(Value & val, llvm::IRBuilder<> & builder);
 
     DenseSet<PHINode*> repairPhis;
-    bool isRepairPhi(PHINode & val) const { return repairPhis.count(&val); }
+    bool isRepairPhi(PHINode & val) const { return repairPhis.count(&val) != 0; }
 
     // repair the data flow graph denoted by repairPhis
     // we run SSA repair with these definitions and replace all uses of the repairPhi with the new value
