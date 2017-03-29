@@ -371,7 +371,7 @@ Linearizer::dropLoopExit(BasicBlock & block, Loop & loop) {
 
 // find a successor within this loop
   BasicBlock * uniqueLoopSucc = nullptr;
-  for (uint i = 0; i < term.getNumSuccessors(); ++i) {
+  for (unsigned i = 0; i < term.getNumSuccessors(); ++i) {
     auto * succ = term.getSuccessor(i);
     if (!uniqueLoopSucc && loop.contains(succ)) {
       uniqueLoopSucc = succ;
@@ -407,7 +407,7 @@ class LiveValueTracker {
 
   // return the incoming index of the exitblock
   int getLoopBlockIndex(PHINode & lcPhi) {
-    for (uint i = 0; i < lcPhi.getNumIncomingValues(); ++i) {
+    for (unsigned i = 0; i < lcPhi.getNumIncomingValues(); ++i) {
       if (loop.contains(lcPhi.getIncomingBlock(i))) return i;
     }
     return -1;
@@ -492,10 +492,10 @@ public:
     return *innerTrackerPhi;
   }
 
-  static uint
+  static unsigned
   GetExitIndex(BasicBlock & exiting, Loop & loop) {
     auto & term = *exiting.getTerminator();
-    for (uint i = 0; i < term.getNumSuccessors(); ++i) {
+    for (unsigned i = 0; i < term.getNumSuccessors(); ++i) {
       if (!loop.contains(term.getSuccessor(i))) {
         return i;
       }
@@ -741,7 +741,7 @@ Linearizer::convertToSingleExitLoop(Loop & loop, RelayNode * exitRelay) {
       }
 
       // for all exiting edges
-      for (uint i = 0; i < lcPhi->getNumIncomingValues(); ++i) {
+      for (unsigned i = 0; i < lcPhi->getNumIncomingValues(); ++i) {
         assert (loop.contains(lcPhi->getIncomingBlock(i)) && "not an LCSSA Phi node");
 
         auto * inst = dyn_cast<Instruction>(lcPhi->getIncomingValue(i));
@@ -836,7 +836,7 @@ Linearizer::needsFolding(PHINode & phi) {
   }
 
   // or incoming blocks in the PHI node are no longer predecessors
-  for (uint i = 0; i < phi.getNumIncomingValues(); ++i) {
+  for (unsigned i = 0; i < phi.getNumIncomingValues(); ++i) {
     if (!predSet.count(phi.getIncomingBlock(i))) { return true; }
   }
 
@@ -1354,8 +1354,8 @@ Linearizer::processBranch(BasicBlock & head, RelayNode * exitRelay, Loop * paren
   bool mustFoldBranch = needsFolding(*branch);
 
 // order successors by global topologic order
-  uint firstSuccIdx = 0;
-  uint secondSuccIdx = 1;
+  unsigned firstSuccIdx = 0;
+  unsigned secondSuccIdx = 1;
 
   if (getIndex(*branch->getSuccessor(firstSuccIdx)) > getIndex(*branch->getSuccessor(secondSuccIdx))) {
     std::swap<>(firstSuccIdx, secondSuccIdx);
@@ -1622,7 +1622,7 @@ Linearizer::cleanup() {
 
     bool allSame = true;
     BasicBlock * singleSucc = nullptr;
-    for (uint i = 0; i < term->getNumSuccessors(); ++i) {
+    for (unsigned i = 0; i < term->getNumSuccessors(); ++i) {
       if (!singleSucc) {
         singleSucc = term->getSuccessor(i);
       } else if (singleSucc != term->getSuccessor(i)) {

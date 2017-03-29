@@ -100,7 +100,7 @@ normalizeFunction(Function& F)
 static Value*
 GetInitValue(Loop& loop, PHINode& phi)
 {
-    for (uint i = 0; i < phi.getNumIncomingValues(); ++i)
+    for (unsigned i = 0; i < phi.getNumIncomingValues(); ++i)
     {
         if (!loop.contains(phi.getIncomingBlock(i)))
         {
@@ -111,10 +111,10 @@ GetInitValue(Loop& loop, PHINode& phi)
 }
 
 static bool
-AdjustStride(Loop& loop, PHINode& phi, uint vectorWidth)
+AdjustStride(Loop& loop, PHINode& phi, unsigned vectorWidth)
 {
     Instruction* increment = nullptr;
-    for (uint i = 0; i < phi.getNumIncomingValues(); ++i)
+    for (unsigned i = 0; i < phi.getNumIncomingValues(); ++i)
     {
         auto* inVal = phi.getIncomingValue(i);
         auto* inInst = dyn_cast<Instruction>(inVal);
@@ -130,7 +130,7 @@ AdjustStride(Loop& loop, PHINode& phi, uint vectorWidth)
 
     // bump up loop increment to vector width
     if (!increment) fail("could not identify increment add in vectorized loop.");
-    uint constPos = isa<Constant>(increment->getOperand(1)) ? 1 : 0;
+    unsigned constPos = isa<Constant>(increment->getOperand(1)) ? 1 : 0;
     auto* incStep = cast<ConstantInt>(increment->getOperand(constPos));
     if (incStep->getLimitedValue() != 1) fail("increment != +1 currently unsupported!");
     auto* vectorIncStep = ConstantInt::getSigned(incStep->getType(), vectorWidth);
@@ -140,7 +140,7 @@ AdjustStride(Loop& loop, PHINode& phi, uint vectorWidth)
 }
 
 void
-vectorizeLoop(Function& parentFn, Loop& loop, uint vectorWidth, LoopInfo& loopInfo, DFG& dfg,
+vectorizeLoop(Function& parentFn, Loop& loop, unsigned vectorWidth, LoopInfo& loopInfo, DFG& dfg,
               CDG& cdg, DominatorTree& domTree, PostDominatorTree& postDomTree)
 {
     // assert: function is already normalized
@@ -216,7 +216,7 @@ vectorizeLoop(Function& parentFn, Loop& loop, uint vectorWidth, LoopInfo& loopIn
 
 // Use case: Outer-loop Vectorizer
 void
-vectorizeFirstLoop(Function& parentFn, uint vectorWidth)
+vectorizeFirstLoop(Function& parentFn, unsigned vectorWidth)
 {
     // normalize
     normalizeFunction(parentFn);
@@ -343,7 +343,7 @@ vectorizeFunction(rv::VectorMapping& vectorizerJob)
 }
 
 Type*
-vectorizeType(Type* scalarTy, rv::VectorShape shape, uint vectorWidth)
+vectorizeType(Type* scalarTy, rv::VectorShape shape, unsigned vectorWidth)
 {
     if (scalarTy->isVoidTy()) return scalarTy;
     if (!shape.isDefined() || shape.hasStridedShape()) return scalarTy;
@@ -353,14 +353,14 @@ vectorizeType(Type* scalarTy, rv::VectorShape shape, uint vectorWidth)
 
 Function*
 createVectorDeclaration(Function& scalarFn, rv::VectorShape resShape,
-                        const rv::VectorShapeVec& argShapes, uint vectorWidth)
+                        const rv::VectorShapeVec& argShapes, unsigned vectorWidth)
 {
     auto* scalarFnTy = scalarFn.getFunctionType();
 
     auto* vectorRetTy = vectorizeType(scalarFnTy->getReturnType(), resShape, vectorWidth);
 
     std::vector<Type*> vectorArgTys;
-    for (uint i = 0; i < scalarFnTy->getNumParams(); ++i)
+    for (unsigned i = 0; i < scalarFnTy->getNumParams(); ++i)
     {
         auto* scalarArgTy = scalarFnTy->getParamType(i);
         rv::VectorShape argShape = argShapes[i];
@@ -497,7 +497,7 @@ int main(int argc, char** argv)
       }
     }
 
-    uint vectorWidth = reader.getOption<uint>("-w", 8);
+    unsigned vectorWidth = reader.getOption<unsigned>("-w", 8);
 
     if (wfvMode)
     {

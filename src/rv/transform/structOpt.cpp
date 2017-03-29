@@ -73,7 +73,7 @@ rv::StructOpt::transformLayout(llvm::AllocaInst & allocaInst, ValueToValueMapTy 
 
       auto * castElemTy = builder.CreatePointerCast(vecPtrVal, PointerType::getUnqual(plainElemTy));
 
-      const uint alignment = layout.getTypeStoreSize(plainElemTy) * vecInfo.getVectorWidth();
+      const unsigned alignment = layout.getTypeStoreSize(plainElemTy) * vecInfo.getVectorWidth();
       vecInfo.setVectorShape(*castElemTy, VectorShape::cont(alignment));
 
 
@@ -281,7 +281,7 @@ rv::StructOpt::optimizeAlloca(llvm::AllocaInst & allocaInst) {
   // replace alloca
   auto * vecAlloc = new AllocaInst(vecAllocTy, allocaInst.getName(), &allocaInst);
 
-  const uint alignment = layout.getPrefTypeAlignment(vecAllocTy); // TODO should enfore a stricter alignment at this point
+  const unsigned alignment = layout.getPrefTypeAlignment(vecAllocTy); // TODO should enfore a stricter alignment at this point
   vecInfo.setVectorShape(*vecAlloc, VectorShape::uni(alignment));
 
   ValueToValueMapTy transformMap;

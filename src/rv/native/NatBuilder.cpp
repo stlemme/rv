@@ -130,7 +130,7 @@ void NatBuilder::vectorize() {
       continue; // keep old region
     }
     auto &termInst = *BB.getTerminator();
-    for (uint i = 0; i < termInst.getNumOperands(); ++i) {
+    for (unsigned i = 0; i < termInst.getNumOperands(); ++i) {
       auto *termOp = termInst.getOperand(i);
       auto *branchTarget = dyn_cast<BasicBlock>(termOp);
       if (!branchTarget) continue;
@@ -794,7 +794,7 @@ void NatBuilder::vectorizeMemoryInstruction(Instruction *const inst) {
   }
 
   // take greatest available alignment
-  alignment = std::max<uint>(origAlignment, alignment);
+  alignment = std::max<unsigned>(origAlignment, alignment);
 
   Value *mask = nullptr;
   Value *vecMem = nullptr;
@@ -817,7 +817,7 @@ void NatBuilder::vectorizeMemoryInstruction(Instruction *const inst) {
         // need to recompute alignment
         alignment = getShape(*sourceLoad).getAlignmentFirst();
         origAlignment = cast<LoadInst>(sourceLoad)->getAlignment();
-        alignment = std::max<uint>(origAlignment, alignment);
+        alignment = std::max<unsigned>(origAlignment, alignment);
 
         vecPtr = sourceAddrs[i];
         if (needsMask) {
@@ -937,7 +937,7 @@ void NatBuilder::vectorizeMemoryInstruction(Instruction *const inst) {
         // need to recompute alignment
         alignment = getShape(*sourceStore).getAlignmentFirst();
         origAlignment = cast<StoreInst>(sourceStore)->getAlignment();
-        alignment = std::max<uint>(origAlignment, alignment);
+        alignment = std::max<unsigned>(origAlignment, alignment);
 
         vecPtr = sourceAddrs[i];
         mappedStoredVal = valShuffles[i];

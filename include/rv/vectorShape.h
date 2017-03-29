@@ -39,7 +39,7 @@ public:
 
   void setAlignment(unsigned newAlignment) { alignment = newAlignment; }
   void setStride(int newStride) { hasConstantStride = true; stride = newStride; }
-  void setVarying(uint newAlignment) { hasConstantStride = false; alignment = newAlignment; }
+  void setVarying(unsigned newAlignment) { hasConstantStride = false; alignment = newAlignment; }
 
   bool isVarying() const { return defined && !hasConstantStride; }
   bool hasStridedShape() const { return defined && hasConstantStride; }

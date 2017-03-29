@@ -95,7 +95,7 @@ VectorizationInfo::dump() const
     out << "}\n";
 }
 
-VectorizationInfo::VectorizationInfo(llvm::Function& parentFn, uint vectorWidth, Region& _region)
+VectorizationInfo::VectorizationInfo(llvm::Function& parentFn, unsigned vectorWidth, Region& _region)
 : mapping(&parentFn, &parentFn, vectorWidth), region(&_region)
 {
     mapping.resultShape = VectorShape::uni();

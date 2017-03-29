@@ -33,7 +33,7 @@ VectorMapping::dump(llvm::raw_ostream & out) const {
 	auto itScalarArg = scalarArgList.begin();
 	auto itVectorArg = vectorArgList.begin();
 
-	uint i = 0;
+	unsigned i = 0;
 	for (VectorShape argShape : argShapes) {
 		out << "\t\t(" << i << ") " << *itScalarArg << " -> " << *itVectorArg << " : " << argShape.str() << "\n";
 		++i; ++itScalarArg; ++itVectorArg;

@@ -21,7 +21,7 @@ namespace rv {
 VectorShape::VectorShape()
     : stride(0), hasConstantStride(false), alignment(0), defined(false) {}
 
-VectorShape::VectorShape(uint _alignment)
+VectorShape::VectorShape(unsigned _alignment)
     : stride(0), hasConstantStride(false), alignment(_alignment),
       defined(true) {}
 

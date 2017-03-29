@@ -169,9 +169,9 @@ PlatformInfo::inferMapping(llvm::Function & scalarFnc, llvm::Function & simdFnc,
 	auto & simdArgList = simdFnc.getArgumentList();
 	auto itSimdArg = simdArgList.begin();
 
-	for (uint i = 0; i < simdArgList.size(); ++i) {
+	for (unsigned i = 0; i < simdArgList.size(); ++i) {
 	// mask special case
-		if (maskPos >= 0 && (i == (uint) maskPos)) {
+		if (maskPos >= 0 && (i == (unsigned) maskPos)) {
 			argShapes.push_back(VectorShape::varying());
 			++itSimdArg;
 			continue;

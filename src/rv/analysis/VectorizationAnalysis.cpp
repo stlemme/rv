@@ -198,8 +198,8 @@ void VectorizationAnalysis::init(Function& F) {
       VectorShape argShape = mVecinfo.getVectorShape(arg);
 
       if (arg.getType()->isPointerTy()) {
-        uint minAlignment = getBaseAlignment(arg, layout);
-        argShape.setAlignment(std::max<uint>(minAlignment, argShape.getAlignmentFirst()));
+        unsigned minAlignment = getBaseAlignment(arg, layout);
+        argShape.setAlignment(std::max<unsigned>(minAlignment, argShape.getAlignmentFirst()));
         // max is the more precise one
       }
 
@@ -492,8 +492,8 @@ void VectorizationAnalysis::compute(Function& F) {
 
     // adjust result type to match alignment
     if (I->getType()->isPointerTy()) {
-      uint minAlignment = getBaseAlignment(*I, layout);
-      New.setAlignment(std::max<uint>(minAlignment, New.getAlignmentFirst()));
+      unsigned minAlignment = getBaseAlignment(*I, layout);
+      New.setAlignment(std::max<unsigned>(minAlignment, New.getAlignmentFirst()));
     }
 
     update(I, New);
@@ -577,8 +577,8 @@ VectorShape VectorizationAnalysis::computeShapeForInst(const Instruction* I) {
           if (!isa<ConstantInt>(index)) return VectorShape::varying();
 
           auto structlayout = layout.getStructLayout(cast<StructType>(subT));
-          unsigned indexconstant = static_cast<uint>(cast<ConstantInt>(index)->getSExtValue());
-          unsigned elemoffset = static_cast<uint>(structlayout->getElementOffset(indexconstant));
+          unsigned indexconstant = static_cast<unsigned>(cast<ConstantInt>(index)->getSExtValue());
+          unsigned elemoffset = static_cast<unsigned>(structlayout->getElementOffset(indexconstant));
 
           subT = cast<StructType>(subT)->getTypeAtIndex(index);
 
@@ -653,7 +653,7 @@ VectorShape VectorizationAnalysis::computeShapeForInst(const Instruction* I) {
       bool mixingPhi = false;
       auto * phi = cast<PHINode>(I);
       Value * singleVal = phi->getIncomingValue(0);
-      for (uint i = 1; i < phi->getNumIncomingValues(); ++i) {
+      for (unsigned i = 1; i < phi->getNumIncomingValues(); ++i) {
         if (singleVal != phi->getIncomingValue(i)) {
           mixingPhi = true;
           break;
@@ -700,7 +700,7 @@ VectorShape
 VectorizationAnalysis::computeGenericArithmeticTransfer(const Instruction & I) {
   assert(I.getNumOperands() > 0 && "can not compute arithmetic transfer for instructions w/o operands");
   // generic transfer function
-  for (uint i = 0; i < I.getNumOperands(); ++i) {
+  for (unsigned i = 0; i < I.getNumOperands(); ++i) {
     if (!getShape(I.getOperand(i)).isUniform()) return VectorShape::varying();
   }
   return VectorShape::uni();
@@ -809,7 +809,7 @@ VectorShape VectorizationAnalysis::computeShapeForBinaryInst(const BinaryOperato
         break;
       }
 
-      uint orConst = cast<ConstantInt>(I->getOperand(constOpId))->getZExtValue();
+      unsigned orConst = cast<ConstantInt>(I->getOperand(constOpId))->getZExtValue();
       int otherOpId = 1 - constOpId;
       VectorShape otherShape = getShape(I->getOperand(otherOpId));
 
@@ -820,7 +820,7 @@ VectorShape VectorizationAnalysis::computeShapeForBinaryInst(const BinaryOperato
       // the or-ed constant is smaller than the alignment
       // in this case we can interpret as an add
       if (otherShape.getAlignmentFirst() > orConst) {
-        auto resAlignment = gcd<uint>(orConst, otherShape.getAlignmentFirst());
+        auto resAlignment = gcd<unsigned>(orConst, otherShape.getAlignmentFirst());
         return VectorShape::strided(otherShape.getStride(), resAlignment);
       } else {
         break;

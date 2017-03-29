@@ -63,13 +63,13 @@ public:
         return mapping;
     }
 
-    uint getVectorWidth() const
+    unsigned getVectorWidth() const
     {
         return mapping.vectorWidth;
     }
 
     VectorizationInfo(VectorMapping _mapping);
-    VectorizationInfo(llvm::Function& parentFn, uint vectorWidth, Region& _region);
+    VectorizationInfo(llvm::Function& parentFn, unsigned vectorWidth, Region& _region);
 
     bool hasKnownShape(const Value& val) const;
 
