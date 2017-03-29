@@ -866,7 +866,7 @@ MaskAnalysis::createLoopExitMasks(Loop* loop)
 
         // We need information about the parent loops' mask phis during recursion.
         // thus, generate them here already and insert them into the graph.
-        for (unsigned long i = 0, e = exitBlocks.size(); i < e; ++i)
+        for (size_t i = 0, e = exitBlocks.size(); i < e; ++i)
         {
             BasicBlock* exitBlock    = exitBlocks[i];
             BasicBlock* exitingBlock = exitingBlocks[i];
@@ -929,7 +929,7 @@ MaskAnalysis::createLoopExitMasks(Loop* loop)
         errs() << "\ngenerating exit mask phis for all exiting blocks of loop "
             << "with header '" << loop->getHeader()->getName() << "'...\n";
         errs() << "  Exiting blocks:\n";
-        for (unsigned long i = 0, e = exitBlocks.size(); i < e; ++i)
+        for (size_t i = 0, e = exitBlocks.size(); i < e; ++i)
         {
             BasicBlock* exitBlock    = exitBlocks[i];
             BasicBlock* exitingBlock = exitingBlocks[i];
@@ -941,7 +941,7 @@ MaskAnalysis::createLoopExitMasks(Loop* loop)
     BasicBlock* preheaderBB = loop->getLoopPreheader();
     BasicBlock* latchBB     = loop->getLoopLatch();
 
-    for (unsigned long i = 0, e = exitBlocks.size(); i < e; ++i)
+    for (size_t i = 0, e = exitBlocks.size(); i < e; ++i)
     {
         BasicBlock* exitBlock    = exitBlocks[i];
         BasicBlock* exitingBlock = exitingBlocks[i];
@@ -1057,7 +1057,7 @@ MaskAnalysis::createLoopExitMasks(Loop* loop)
     // The combined mask is the "or" of all MANDATORY loop exit masks or a
     // reference to a single exit mask.
     MaskPtr combinedMask = nullptr;
-    for (unsigned long i = 0, e = exitBlocks.size(); i < e; ++i)
+    for (size_t i = 0, e = exitBlocks.size(); i < e; ++i)
     {
         BasicBlock* exitBB    = exitBlocks[i];
         BasicBlock* exitingBB = exitingBlocks[i];
@@ -1242,7 +1242,7 @@ MaskAnalysis::mapMaskInformation(ValueToValueMapTy& valueMap)
     }
     for (auto &mask : mMasks)
     {
-        for (unsigned long i = 0, e = mask->mIncomingDirs.size(); i < e; ++i)
+        for (size_t i = 0, e = mask->mIncomingDirs.size(); i < e; ++i)
         {
             assert (valueMap.count(mask->mIncomingDirs[i]));
             mask->mIncomingDirs[i] = cast<BasicBlock>(valueMap[mask->mIncomingDirs[i]]);

@@ -1029,7 +1029,7 @@ Linearizer::foldPhis(BasicBlock & block) {
     // all inputs that are incoming on this edge after folding
     SmallVector<BasicBlock*, 4> superposedInBlocks;
 
-    for (int i = 0; i < phi.getNumIncomingValues(); ++i) {
+    for (unsigned i = 0; i < phi.getNumIncomingValues(); ++i) {
       auto * inBlock = phi.getIncomingBlock(i);
 
       // this incoming block remains an immediate predecessor so its value can only be live in on that block
@@ -1604,7 +1604,7 @@ Linearizer::cacheMasks(){
 
 // cache branch masks
    auto & term = *block.getTerminator();
-   for (int i = 0; i < term.getNumSuccessors(); ++i) {
+   for (unsigned i = 0; i < term.getNumSuccessors(); ++i) {
      auto * succBlock = term.getSuccessor(i);
      auto * edgeMask = maskAnalysis.getExitMask(block, *succBlock);
      if (edgeMask) setEdgeMask(block, *succBlock, edgeMask);
@@ -1669,7 +1669,7 @@ Linearizer::fixSSA() {
 
       // phi def/use repair
       if (phi) {
-        for (int inIdx = 0; inIdx < phi->getNumIncomingValues(); ++inIdx) {
+        for (unsigned inIdx = 0; inIdx < phi->getNumIncomingValues(); ++inIdx) {
           auto * inBlock = phi->getIncomingBlock(inIdx);
           auto * inVal = phi->getIncomingValue(inIdx);
 
@@ -1693,7 +1693,7 @@ Linearizer::fixSSA() {
       }
 
       // non-phi def/use repair
-      for (int opIdx = 0; opIdx < inst.getNumOperands(); ++opIdx) {
+      for (unsigned opIdx = 0; opIdx < inst.getNumOperands(); ++opIdx) {
         auto * opInst = dyn_cast<Instruction>(inst.getOperand(opIdx));
         if (!opInst) continue;
 
