@@ -1,7 +1,3 @@
-# Sleef lib
-# SET ( SLEEF_DIR ${CMAKE_CURRENT_SOURCE_DIR} CACHE STRING "Path to libsleef sources" FORCE )
-# SET ( RV_LIB_SLEEF_DIR "${SLEEF_DIR}/simd" )
-# SET ( RV_LIB_SLEEF_OUT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/build )
 
 set(SLEEF_BC_AVX2_SP avx2_sleef_sp.bc)
 set(SLEEF_BC_AVX_SP avx_sleef_sp.bc)
@@ -17,7 +13,6 @@ if(LLVM_TOOL_CLANG)
 else()
     message(FATAL_ERROR "Clang not found. Please point LLVM_TOOL_CLANG to clang.")
 endif()
-# SET ( RV_LIB_SLEEF_OUT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/sleefsrc" )
 
 set(SLEEF_BUILD_FLAGS -emit-llvm -c -Wall -Wno-unused-function -O3)
 set(SLEEF_SIMD_SP_FILE ${CMAKE_CURRENT_SOURCE_DIR}/simd/sleefsimdsp.c)

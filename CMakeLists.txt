@@ -29,11 +29,7 @@ endif()
 # TODO: move header files to src and export public headers via install
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-# libRV
 add_subdirectory(src)
-
-# rvTool
-#add_subdirectory(tools)
 
 export(TARGETS rvTool RV FILE ${CMAKE_BINARY_DIR}/share/RV/cmake/rv-exports.cmake)
 # configure_file(cmake/impala-config.cmake.in ${CMAKE_BINARY_DIR}/share/impala/cmake/impala-config.cmake @ONLY)
