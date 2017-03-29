@@ -30,7 +30,10 @@ find_program(LLVM_TOOL_CLANG NAMES clang PATHS ${LLVM_PLATFORM_TOOLS_PATH} PATH_
 # find_program(LLVM_TOOL_CLANGPP NAMES clang++ PATHS ${LLVM_PLATFORM_TOOLS_PATH} PATH_SUFFIXES ${CMAKE_CONFIGURATION_TYPES})
 
 # Sleef
-add_subdirectory(sleef)
+option(RV_ENABLE_SLEEF "enable the usage of sleef in libRV" ON)
+if(RV_ENABLE_SLEEF)
+    add_subdirectory(sleef)
+endif()
 
 # TODO: move header files to src and export public headers via install
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
