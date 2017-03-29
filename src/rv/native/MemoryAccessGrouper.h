@@ -56,7 +56,7 @@ namespace native {
     InstructionGroup();
 
     bool insert(llvm::Instruction *element, llvm::MemoryDependenceAnalysis &MDA);
-    unsigned long size() const { return elements.size(); }
+    size_t size() const { return elements.size(); }
 
     std::vector<llvm::Instruction *>::iterator begin();
     std::vector<llvm::Instruction *>::iterator end();
