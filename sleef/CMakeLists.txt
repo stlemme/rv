@@ -11,6 +11,12 @@ set(SLEEF_BC_AVX2_DP avx2_sleef_dp.bc)
 set(SLEEF_BC_AVX_DP avx_sleef_dp.bc)
 set(SLEEF_BC_SSE_DP sse_sleef_dp.bc)
 
+find_program(LLVM_TOOL_CLANG NAMES clang PATHS ${LLVM_TOOLS_BINARY_DIR} PATH_SUFFIXES ${CMAKE_CONFIGURATION_TYPES})
+if(LLVM_TOOL_CLANG)
+    message(STATUS "Clang found: ${LLVM_TOOL_CLANG}")
+else()
+    message(FATAL_ERROR "Clang not found. Please point LLVM_TOOL_CLANG to clang.")
+endif()
 # SET ( RV_LIB_SLEEF_OUT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/sleefsrc" )
 
 set(SLEEF_BUILD_FLAGS -emit-llvm -c -Wall -Wno-unused-function -O3)
