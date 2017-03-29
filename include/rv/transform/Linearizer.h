@@ -43,7 +43,7 @@ namespace rv {
   class LiveValueTracker;
 
   // internal helper class for partially folded incoming blocks of PHI nodes
-  class SuperInput;
+  struct SuperInput;
 
   class Linearizer {
 

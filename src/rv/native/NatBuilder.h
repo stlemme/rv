@@ -26,7 +26,7 @@
 namespace rv {
   class Region;
   class ReductionAnalysis;
-  class Reduction;
+  struct Reduction;
 }
 
 namespace native {

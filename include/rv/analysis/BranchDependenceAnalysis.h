@@ -21,7 +21,7 @@ namespace llvm {
   class BasicBlock;
   class TerminatorInst;
   class DominatorTree;
-  class PostDominatorTree;
+  struct PostDominatorTree;
 }
 
 using llvm::DenseMap;
