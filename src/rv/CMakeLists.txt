@@ -3,7 +3,9 @@
 # SET ( RV_LIB_MATH_DIR "${RV_LIB_DIR}/mathfun" )
 
 # setup additional lib definition
-add_definitions("-DRV_SLEEF_BC_DIR=\"${RV_SLEEF_BC_DIR}\"")
+if(RV_ENABLE_SLEEF)
+    add_definitions("-DRV_SLEEF_BC_DIR=\"${RV_SLEEF_BC_DIR}\"")
+endif()
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
@@ -58,7 +60,9 @@ add_library(RV ${RV_SOURCE_FILES})
 llvm_map_components_to_libnames(LLVM_LIBRARIES analysis irreader support core transformutils)
 target_link_libraries(RV ${LLVM_LIBRARIES})
 
-add_dependencies(RV libsleef_x64)
+if(TARGET libsleef_x64)
+    add_dependencies(RV libsleef_x64)
+endif()
 
 # make install
 # SET ( CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE )
