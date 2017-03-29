@@ -1,3 +1,4 @@
+cmake_minimum_required(VERSION 3.1 FATAL_ERROR)
 
 set(SLEEF_BC_AVX2_SP avx2_sleef_sp.bc)
 set(SLEEF_BC_AVX_SP avx_sleef_sp.bc)
