@@ -225,7 +225,7 @@ Linearizer::promoteDefinitionExt(SmallVector<Value*, 16> & defs, Value & inst, V
 
   IF_DEBUG_LIN { errs() << "\t* promoting value " << inst << " from def block " << defBlockId << " to " << destBlockId << "\n"; }
 
-  assert(defs.size() > span);
+  assert(defs.size() > static_cast<size_t>(span));
 
   defs[0] = &inst;
 
@@ -935,7 +935,7 @@ Linearizer::createSuperInput(PHINode & phi, SuperInput & superInput) {
   auto & phiBlock = *phi.getParent();
 
   auto phiShape = vecInfo.getVectorShape(phi);
-  for (int i = 1; i < blocks.size(); ++i) {
+  for (size_t i = 1; i < blocks.size(); ++i) {
     auto * inBlock = blocks[i];
     auto * inVal = phi.getIncomingValueForBlock(inBlock);
 

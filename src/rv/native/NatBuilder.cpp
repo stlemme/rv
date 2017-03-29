@@ -1429,7 +1429,7 @@ llvm::Value *NatBuilder::maskInactiveLanes(llvm::Value *const value, const Basic
 Value&
 NatBuilder::materializeVectorReduce(IRBuilder<> & builder, Value & initVal, Value & vecVal, Instruction & reductOp) {
   Value * accu = &initVal;
-  for (int i = 0; i < vectorizationInfo.getVectorWidth(); ++i) {
+  for (unsigned i = 0; i < vectorizationInfo.getVectorWidth(); ++i) {
     auto * laneVal = builder.CreateExtractElement(&vecVal, i, "red_ext");
 
     Instruction * copy = reductOp.clone();

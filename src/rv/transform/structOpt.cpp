@@ -102,7 +102,7 @@ rv::StructOpt::transformLayout(llvm::AllocaInst & allocaInst, ValueToValueMapTy 
       auto vecBasePtr = transformMap[gep->getOperand(0)];
 
       std::vector<Value*> indexVec;
-      for (int i = 1; i < gep->getNumOperands(); ++i) {
+      for (unsigned i = 1; i < gep->getNumOperands(); ++i) {
         indexVec.push_back(gep->getOperand(i));
       }
 
@@ -141,7 +141,7 @@ rv::StructOpt::transformLayout(llvm::AllocaInst & allocaInst, ValueToValueMapTy 
 // repair phi nodes
   for (auto * phi : postProcessPhis) {
     auto * vecPhi = cast<PHINode>(transformMap[phi]);
-    for (int i = 0; i < phi->getNumIncomingValues(); ++i) {
+    for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
       vecPhi->addIncoming(transformMap[phi->getIncomingValue(i)], phi->getIncomingBlock(i));
     }
   }
@@ -225,7 +225,7 @@ rv::StructOpt::allUniformGeps(llvm::AllocaInst & allocaInst) {
     auto * gep = dyn_cast<GetElementPtrInst>(inst);
     if (gep) {
       // check whether all gep operands are uniform (except the baseptr)
-      for (int i = 1; i < gep->getNumOperands(); ++i) {
+      for (unsigned i = 1; i < gep->getNumOperands(); ++i) {
         if (!getVectorShape(*gep->getOperand(i)).isUniform()) {
           IF_DEBUG_SO { errs() << "skip: non uniform gep: " << *gep << " at index " << i << " : " << *gep->getOperand(i) << "\n"; }
           return false;
@@ -239,7 +239,7 @@ rv::StructOpt::allUniformGeps(llvm::AllocaInst & allocaInst) {
     auto * phi = dyn_cast<PHINode>(allocaUser);
     if (!phi) continue;
 
-    for (int i = 0; i < phi->getNumIncomingValues(); ++i) {
+    for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
       auto * inVal = phi->getIncomingValue(i);
       if (isa<Instruction>(inVal) && !seen.count(inVal)) {
         IF_DEBUG_SO { errs() << "skip: alloca mixes with non-derived value " << *inVal << " at phi " << *phi << "\n"; }
@@ -304,7 +304,7 @@ rv::StructOpt::vectorizeType(llvm::Type & scalarAllocaTy) {
 // finite aggrgate -> aggrgate of vectorized elemnts
   if (scalarAllocaTy.isStructTy()) {
     std::vector<Type*> elemTyVec;
-    for (int i = 0; i < scalarAllocaTy.getStructNumElements(); ++i) {
+    for (unsigned i = 0; i < scalarAllocaTy.getStructNumElements(); ++i) {
       auto * vecElem = vectorizeType(*scalarAllocaTy.getStructElementType(i));
       if (!vecElem) return nullptr;
       elemTyVec.push_back(vecElem);
