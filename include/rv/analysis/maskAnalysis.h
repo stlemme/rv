@@ -177,7 +177,7 @@ private:
 class MaskAnalysisWrapper : public FunctionPass {
   rv::MaskAnalysis* mMaskAnalysis;
 public:
-  static char ID __attribute__((unused)); // Pass identification, replacement for typeid.
+  [[maybe_unused]] static char ID; // Pass identification, replacement for typeid.
 
   MaskAnalysisWrapper();
 
