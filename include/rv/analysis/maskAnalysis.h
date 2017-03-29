@@ -34,6 +34,11 @@ using namespace rv::MaskGraphUtils;
 using rv::VectorizationInfo;
 using rv::PlatformInfo;
 
+#ifdef __GNUC__
+#define MAYBE_UNUSED gnu::unused
+#else
+#define MAYBE_UNUSED maybe_unused
+#endif
 
 namespace rv {
   class PlatformInfo;
@@ -177,7 +182,7 @@ private:
 class MaskAnalysisWrapper : public FunctionPass {
   rv::MaskAnalysis* mMaskAnalysis;
 public:
-  [[maybe_unused]] static char ID; // Pass identification, replacement for typeid.
+  [[MAYBE_UNUSED]] static char ID; // Pass identification, replacement for typeid.
 
   MaskAnalysisWrapper();
 

@@ -66,7 +66,7 @@ private:
 class MaskGeneratorWrapper : public FunctionPass
 {
 public:
-	[[maybe_unused]] static char ID; // Pass identification, replacement for typeid.
+	[[MAYBE_UNUSED]] static char ID; // Pass identification, replacement for typeid.
 
 	MaskGeneratorWrapper();
 
