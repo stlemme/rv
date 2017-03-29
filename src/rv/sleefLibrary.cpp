@@ -15,7 +15,11 @@
 
 #include "utils/rvTools.h"
 
+#ifdef RV_SLEEF_BC_DIR
 #define SLEEF_FILES RV_SLEEF_BC_DIR
+#else
+#define SLEEF_FILES
+#endif
 #define SLEEF_AVX2_SP SLEEF_FILES"/avx2_sleef_sp.bc"
 #define SLEEF_AVX_SP SLEEF_FILES"/avx_sleef_sp.bc"
 #define SLEEF_SSE_SP SLEEF_FILES"/sse_sleef_sp.bc"
