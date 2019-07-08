@@ -24,6 +24,8 @@ if (RV_DEBUG)
   add_definitions( "-DRV_DEBUG" )
 endif()
 
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+
 add_rv_library(RV
   annotations.cpp
   PlatformInfo.cpp
@@ -119,9 +121,9 @@ if (BUILD_SHARED_LIBS)
     ${LLVM_LIBRARY_DIR}
   )
 elseif (LLVM_LINK_LLVM_DYLIB)
-  target_link_libraries(RV
+  target_link_libraries(RV PRIVATE
     LLVM
-  )
+  )	
   link_directories(
     ${LLVM_LIBRARY_DIR}
   )

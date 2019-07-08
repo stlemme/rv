@@ -3,8 +3,11 @@ if (NOT DEFINED LLVM_MAIN_SRC_DIR)
   project(RV)
   cmake_minimum_required(VERSION 3.4.3)
 
+  find_package(LLVM CONFIG)
+  find_package(Clang CONFIG)
+
   # Where is LLVM installed?
-  set(LLVM_INSTALL_ROOT "" CACHE PATH "Root of LLVM install.")
+  set(LLVM_INSTALL_ROOT "${LLVM_INSTALL_PREFIX}" CACHE PATH "Root of LLVM install.")
   # Check if the LLVM_INSTALL_ROOT valid.
   if( NOT EXISTS ${LLVM_INSTALL_ROOT}/include/llvm )
     message(FATAL_ERROR "LLVM_INSTALL_ROOT (${LLVM_INSTALL_ROOT}) is not a valid LLVM installation.")
@@ -85,8 +88,12 @@ if (NOT DEFINED LLVM_MAIN_SRC_DIR)
 
   # Make sure the isl c files are built as fPIC
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
+
+  find_package(PythonInterp 3 REQUIRED)
 else ()
   set(LLVM_SOURCE_ROOT "${LLVM_MAIN_SRC_DIR}")
+  set(RV_CMAKE_SCOPE "PARENT_SCOPE")
 endif ()
 
 # Options
@@ -95,7 +102,7 @@ OPTION(RV_ENABLE_CRT "Implement complex math functions using BC-compiler compile
 OPTION(RV_DEBUG "Enable verbose debug output and expensive internal checks." OFF)
 
 set(RV_TARGETS_TO_BUILD "Native" CACHE STRING "Semicolon-separated list of targets to build, or 'Native'.")
-string(REPLACE "Native" ${LLVM_NATIVE_ARCH} RV_TARGETS_TO_BUILD "${RV_TARGETS_TO_BUILD}")
+string(REPLACE "Native" "${LLVM_NATIVE_ARCH}" RV_TARGETS_TO_BUILD "${RV_TARGETS_TO_BUILD}")
 list(REMOVE_DUPLICATES RV_TARGETS_TO_BUILD)
 
 # check enabled targets
@@ -114,7 +121,7 @@ endif()
 
 set(RV_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(RV_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR})
-set(RV_INCLUDE_DIR ${RV_SOURCE_DIR}/include PARENT_SCOPE)
+set(RV_INCLUDE_DIR ${RV_SOURCE_DIR}/include ${RV_CMAKE_SCOPE})
 
 # Add path for custom modules
 set(CMAKE_MODULE_PATH
