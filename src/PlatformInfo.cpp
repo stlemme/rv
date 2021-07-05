@@ -6,210 +6,282 @@
 #include "rv/sleefLibrary.h"
 
 #include "utils/rvTools.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/Module.h"
+#include "rv/utils.h"
 
 #include "rvConfig.h"
 
+using namespace llvm;
+
 namespace rv {
 
-  PlatformInfo::PlatformInfo(Module & _mod, TargetTransformInfo *TTI, TargetLibraryInfo *TLI) : mod(_mod), mTTI(TTI), mTLI(TLI), avx2Mod(0),
-                                                                                 avxMod(0), sseMod(0) {}
+// result shape of function @funcName in target module @module
+VectorShape
+FunctionResolver::ComputeShape(const VectorShapeVec & argShapes) {
+  // TODO run VA
+  for (const auto & argShape : argShapes) {
+    if (!argShape.isUniform()) return VectorShape::varying();
+  }
+  return VectorShape::uni();
+}
 
-  PlatformInfo::~PlatformInfo() {
-    for (auto it : funcMappings) {
-      delete it.second;
+class TLIFuncResolver : public FunctionResolver {
+  TargetLibraryInfo & TLI;
+  llvm::StringRef funcName;
+  llvm::FunctionType & scaFuncTy;
+  int vectorWidth;
+
+public:
+  TLIFuncResolver(Module & _destModule, TargetLibraryInfo & _TLI, llvm::StringRef _funcName, llvm::FunctionType & _scaFuncTy, int _vectorWidth)
+  : FunctionResolver(_destModule)
+  , TLI(_TLI)
+  , funcName(_funcName)
+  , scaFuncTy(_scaFuncTy)
+  , vectorWidth(_vectorWidth)
+  {}
+
+  VectorShape
+  requestResultShape() { return VectorShape::varying(); }
+
+  Function& requestVectorized() {
+    // TODO actually emit a SIMD declaration for this function
+    StringRef tliFnName = TLI.getVectorizedFunction(funcName, vectorWidth);
+    return *targetModule.getFunction(tliFnName);
+  }
+};
+
+class TLIResolverService : public ResolverService {
+  TargetLibraryInfo & TLI;
+
+public:
+  TLIResolverService(TargetLibraryInfo & _TLI)
+  : TLI(_TLI)
+  {}
+
+  std::unique_ptr<FunctionResolver>
+  resolve(llvm::StringRef funcName, llvm::FunctionType & scaFuncTy, const VectorShapeVec & argShapes, int vectorWidth, llvm::Module & destModule) {
+    StringRef tliFnName = TLI.getVectorizedFunction(funcName, vectorWidth);
+    if (!tliFnName.empty()) {
+      return std::make_unique<TLIFuncResolver>(destModule, TLI, funcName, scaFuncTy, vectorWidth);
     }
-  }
-
-  void PlatformInfo::addMapping(const Function *function, const rv::VectorMapping *mapping) {
-    funcMappings[function] = mapping;
-  }
-
-  void PlatformInfo::removeMappingIfPresent(const Function *function) {
-    auto found = funcMappings.find(function);
-
-    if (found != funcMappings.end())
-      funcMappings.erase(found);
-  }
-
-  const rv::VectorMapping *PlatformInfo::getMappingByFunction(const Function *function) const {
-    auto found = funcMappings.find(function);
-
-    if (found != funcMappings.end())
-      return found->second;
-
     return nullptr;
   }
+};
 
-  void PlatformInfo::setTTI(TargetTransformInfo *TTI) {
-    mTTI = TTI;
+void
+PlatformInfo::registerDeclareSIMDFunction(Function & F) {
+  auto attribSet = F.getAttributes().getFnAttributes();
+  // parse SIMD signatures
+  std::vector<VectorMapping> wfvJobs;
+  for (auto attrib : attribSet) {
+    if (!attrib.isStringAttribute()) continue;
+    StringRef attribText = attrib.getKindAsString();
+
+    if (attribText.size() < 2) continue;
+
+    VectorMapping vecMapping;
+    if (!parseVectorMapping(F, attribText, vecMapping, false)) continue;
+    addMapping(vecMapping);
   }
 
-  void PlatformInfo::setTLI(TargetLibraryInfo *TLI) {
-    mTLI = TLI;
+}
+
+PlatformInfo::PlatformInfo(Module &_mod, TargetTransformInfo *TTI,
+                           TargetLibraryInfo *TLI)
+    : mod(_mod), mTTI(TTI), mTLI(TLI)
+{
+  for (auto & F : mod) {
+    registerDeclareSIMDFunction(F);
   }
+}
 
-  TargetTransformInfo *PlatformInfo::getTTI() {
-    return mTTI;
+PlatformInfo::~PlatformInfo() {
+  for (auto it : funcMappings) {
+    delete it.second;
   }
+}
 
-  TargetLibraryInfo *PlatformInfo::getTLI() {
-    return mTLI;
+void PlatformInfo::setTTI(TargetTransformInfo *TTI) { mTTI = TTI; }
+
+void PlatformInfo::setTLI(TargetLibraryInfo *TLI) { mTLI = TLI; }
+
+TargetTransformInfo *PlatformInfo::getTTI() { return mTTI; }
+
+TargetLibraryInfo *PlatformInfo::getTLI() { return mTLI; }
+
+void
+PlatformInfo::addResolverService(std::unique_ptr<ResolverService>&& newResolver, bool givePrecedence) {
+  auto itInsert = givePrecedence ? resolverServices.begin() : resolverServices.end();
+  resolverServices.insert(itInsert, std::move(newResolver));
+}
+
+std::unique_ptr<FunctionResolver>
+PlatformInfo::getResolver(StringRef funcName,
+                          FunctionType & scaFuncTy,
+                          const VectorShapeVec & argShapes,
+                          int vectorWidth) const {
+  for (const auto & resolver : resolverServices) {
+    std::unique_ptr<FunctionResolver> funcResolver = resolver->resolve(funcName, scaFuncTy, argShapes, vectorWidth, mod);
+    if (funcResolver) return funcResolver;
   }
-
-  static bool compareByScalarFnName(const VecDesc &LHS, const VecDesc &RHS) {
-    return std::strncmp(LHS.scalarFnName, RHS.scalarFnName, std::strlen(RHS.scalarFnName)) < 0;
-  }
-
-  static bool compareWithScalarFnName(const VecDesc &LHS, StringRef S) {
-    return std::strncmp(LHS.scalarFnName, S.data(), S.size()) < 0;
-  }
-
-  void PlatformInfo::addVectorizableFunctions(ArrayRef<VecDesc> funcs) {
-    commonVectorMappings.insert(commonVectorMappings.end(), funcs.begin(), funcs.end());
-    std::sort(commonVectorMappings.begin(), commonVectorMappings.end(), compareByScalarFnName);
-  }
-
-  bool PlatformInfo::isFunctionVectorizable(StringRef funcName, unsigned vectorWidth) {
-    return !getVectorizedFunction(funcName, vectorWidth).empty();
-  }
-
-  StringRef PlatformInfo::getVectorizedFunction(StringRef funcName, unsigned vectorWidth, bool *isInTLI) {
-    if (funcName.empty())
-      return funcName;
-
-    StringRef tliFnName = mTLI->getVectorizedFunction(funcName, vectorWidth);
-    if (!tliFnName.empty()) {
-      if (isInTLI) *isInTLI = true;
-      return tliFnName;
-    }
-
-    auto I = std::lower_bound(commonVectorMappings.begin(), commonVectorMappings.end(), funcName,
-                              compareWithScalarFnName);
-    while (I != commonVectorMappings.end() && StringRef(I->scalarFnName) == funcName) {
-      if (I->vectorWidth == vectorWidth)
-        return I->vectorFnName;
-      ++I;
-    }
-    return StringRef();
-  }
-
-  Function *PlatformInfo::requestVectorizedFunction(StringRef funcName, unsigned vectorWidth, Module *insertInto,
-                                                      bool doublePrecision) {
-    bool isInTLI = false;
-    StringRef vecFuncName = getVectorizedFunction(funcName, vectorWidth, &isInTLI);
-    if (vecFuncName.empty()) return nullptr;
-
-    if (isInTLI)
-      return insertInto->getFunction(vecFuncName);
-    else
-      return requestSleefFunction(funcName, vecFuncName, insertInto, doublePrecision);
-  }
+  return nullptr;
+}
 
 
+
+
+// shape based mappings
 bool
-PlatformInfo::addSIMDMapping(rv::VectorMapping & mapping) {
-  if (funcMappings.count(mapping.scalarFn)) return false;
-  funcMappings[mapping.scalarFn] = new rv::VectorMapping(mapping);
+PlatformInfo::addMapping(rv::VectorMapping &mapping) {
+  auto it = funcMappings.find(mapping.scalarFn);
+  VecMappingShortVec * vecMappings = nullptr;
+  if (it == funcMappings.end()) {
+    vecMappings = new VecMappingShortVec();
+    funcMappings[mapping.scalarFn] = vecMappings;
+  } else {
+    vecMappings = it->second;
+  }
+
+  // check if there is an equivalent mapping already
+  for (auto & knownMapping : *vecMappings) {
+    if (knownMapping == mapping) return false;
+  }
+
+  vecMappings->push_back(mapping);
   return true;
 }
 
-// This function should be called *before* run().
+
+// query available vector mappings for a given vector call signature
 bool
-PlatformInfo::addSIMDMapping(const Function& scalarFunction,
-                        const Function& simdFunction,
-                        const int       maskPosition,
-                        const bool      mayHaveSideEffects)
-{
-  assert(scalarFunction.getParent() == simdFunction.getParent());
+PlatformInfo::getMappingsForCall(VecMappingShortVec & matchVec, const llvm::Function & scalarFn, const VectorShapeVec & argShapes, unsigned vectorWidth, bool needsPredication) {
+// register user shapes
+  auto it = funcMappings.find(&scalarFn);
+  if (it == funcMappings.end()) return false;
+  auto & allMappings = *it->second;
 
-    // Find out which arguments are UNIFORM and which are VARYING.
-    SmallVector<bool, 4> uniformArgs;
-    uniformArgs.reserve(scalarFunction.getArgumentList().size());
+  for (auto & mapping : allMappings) {
+    if (mapping.vectorWidth > 1 && (mapping.vectorWidth != vectorWidth)) continue;
+    if (mapping.maskPos < 0 && needsPredication) continue;
 
-    Function::const_arg_iterator scalarA = scalarFunction.arg_begin();
-    Function::const_arg_iterator simdA   = simdFunction.arg_begin();
+    // check that all arg shapes are compatible with the shapes in the caller
+    bool foundIncompatibleShape = false;
+    for (int i = 0; i < (int) argShapes.size(); ++i) {
+      if (!mapping.argShapes[i].contains(argShapes[i])) {
+        foundIncompatibleShape = true;
+        break;
+      }
+    }
+    if (foundIncompatibleShape) continue;
 
-    for (Function::const_arg_iterator scalarE = scalarFunction.arg_end();
-            scalarA != scalarE; ++scalarA, ++simdA)
-    {
-        Type*      scalarType = scalarA->getType();
-        Type*      simdType   = simdA->getType();
-        const bool isUniform  = typesMatch(scalarType, simdType);
+    matchVec.push_back(mapping);
+  }
+  return matchVec.size() > 0;
+}
 
-        uniformArgs.push_back(isUniform);
+VectorMapping
+PlatformInfo::inferMapping(llvm::Function &scalarFnc,
+                                          llvm::Function &simdFnc,
+                                          int maskPos) {
+
+  // return shape
+  rv::VectorShape resultShape;
+
+  auto *scalarRetTy = scalarFnc.getReturnType();
+  auto *simdRetTy = simdFnc.getReturnType();
+
+  if (typesMatch(scalarRetTy, simdRetTy)) {
+    resultShape = VectorShape::uni();
+  } else {
+    assert(simdRetTy->isVectorTy() && "return type mismatch");
+    resultShape = VectorShape::varying();
+  }
+
+  // argument shapes
+  rv::VectorShapeVec argShapes;
+
+  auto itScalarArg = scalarFnc.arg_begin();
+  auto itSimdArg = simdFnc.arg_begin();
+
+  for (size_t i = 0; i < simdFnc.arg_size(); ++i) {
+    // mask special case
+    if (maskPos >= 0 && (i == (unsigned)maskPos)) {
+      argShapes.push_back(VectorShape::varying());
+      ++itSimdArg;
+      continue;
     }
 
-    funcMappings[&scalarFunction] = inferMapping(const_cast<Function&>(scalarFunction), const_cast<Function&>(simdFunction), maskPosition);
+    // trailing additional argument case
+    if (itScalarArg == scalarFnc.arg_end()) {
+      IF_DEBUG errs() << "Unexpected additional argument (pos " << i
+                      << ") in simd function " << simdFnc << "\n";
+      argShapes.push_back(VectorShape::varying());
+      ++itSimdArg;
+      continue;
+    }
 
-    return true;
+    // default argument case
+    if (typesMatch(itScalarArg->getType(), itSimdArg->getType())) {
+      argShapes.push_back(VectorShape::uni()); // unaligned
+    } else {
+      argShapes.push_back(VectorShape::varying());
+    }
+
+    ++itScalarArg;
+    ++itSimdArg;
+  }
+
+  assert(itScalarArg == scalarFnc.arg_end());
+  assert(itSimdArg == simdFnc.arg_end());
+
+  int vecWidth = 0; // FIXME
+  return rv::VectorMapping(&scalarFnc, &simdFnc,
+                               vecWidth, // if all arguments have shapes this
+                                         // function is suitable for all
+                                         // possible widths
+                               maskPos, resultShape, argShapes);
 }
 
-VectorMapping*
-PlatformInfo::inferMapping(llvm::Function & scalarFnc, llvm::Function & simdFnc, int maskPos) {
-
-// return shape
-	rv::VectorShape resultShape;
-
-	auto * scalarRetTy = scalarFnc.getReturnType();
-	auto * simdRetTy = simdFnc.getReturnType();
-
-	if (typesMatch(scalarRetTy, simdRetTy)) {
-		resultShape = VectorShape::uni();
-	} else {
-		assert(simdRetTy->isVectorTy() && "return type mismatch");
-		resultShape = VectorShape::varying();
-	}
-
-// argument shapes
-	rv::VectorShapeVec argShapes;
-
-	auto & scalarArgList = scalarFnc.getArgumentList();
-	auto itScalarArg = scalarArgList.begin();
-
-	auto & simdArgList = simdFnc.getArgumentList();
-	auto itSimdArg = simdArgList.begin();
-
-	for (uint i = 0; i < simdArgList.size(); ++i) {
-	// mask special case
-		if (maskPos >= 0 && (i == (uint) maskPos)) {
-			argShapes.push_back(VectorShape::varying());
-			++itSimdArg;
-			continue;
-		}
-
-	// trailing additional argument case
-		if (itScalarArg == scalarArgList.end()) {
-			IF_DEBUG errs() << "Unexpected additional argument (pos " << i << ") in simd function " << simdFnc << "\n";
-			argShapes.push_back(VectorShape::varying());
-			++itSimdArg;
-			continue;
-		}
-
-	// default argument case
-		if (typesMatch(itScalarArg->getType(), itSimdArg->getType())) {
-			argShapes.push_back(VectorShape::uni()); // unaligned
-		} else {
-			argShapes.push_back(VectorShape::varying());
-		}
-
-		++itScalarArg;
-		++itSimdArg;
-	}
-
-	assert(itScalarArg == scalarArgList.end());
-	assert(itSimdArg == simdArgList.end());
-
-        int vecWidth = 0; // FIXME
-	return new rv::VectorMapping(
-				&scalarFnc,
-				&simdFnc,
-				vecWidth, // if all arguments have shapes this function is suitable for all possible widths
-				maskPos,
-				resultShape,
-				argShapes
-			);
+Function *PlatformInfo::requestVectorMaskReductionFunc(const std::string &name, size_t width) {
+  std::string mangledName = name + "_v" + std::to_string(width);
+  auto *redFunc = mod.getFunction(mangledName);
+  if (redFunc)
+    return redFunc;
+  auto &context = mod.getContext();
+  auto *boolTy = Type::getInt1Ty(context);
+  auto *vecBoolTy = VectorType::get(boolTy, width);
+  auto *funcTy = FunctionType::get(boolTy, vecBoolTy, false);
+  redFunc = Function::Create(funcTy, GlobalValue::ExternalLinkage, mangledName, &mod);
+  redFunc->setDoesNotAccessMemory();
+  redFunc->setDoesNotThrow();
+  redFunc->setConvergent();
+  redFunc->setDoesNotRecurse();
+  return redFunc; // TODO add SIMD mapping
+}
+Function *PlatformInfo::requestMaskReductionFunc(const std::string &name) {
+  auto *redFunc = mod.getFunction(name);
+  if (redFunc)
+    return redFunc;
+  auto &context = mod.getContext();
+  auto *boolTy = Type::getInt1Ty(context);
+  auto *funcTy = FunctionType::get(boolTy, boolTy, false);
+  redFunc = Function::Create(funcTy, GlobalValue::ExternalLinkage, name, &mod);
+  redFunc->setDoesNotAccessMemory();
+  redFunc->setDoesNotThrow();
+  redFunc->setConvergent();
+  redFunc->setDoesNotRecurse();
+  return redFunc; // TODO add SIMD mapping
 }
 
+size_t
+PlatformInfo::getMaxVectorWidth() const {
+  return getMaxVectorBits() / 8;
+}
 
+size_t
+PlatformInfo::getMaxVectorBits() const {
+  return mTTI->getRegisterBitWidth(true);
+}
 
 }

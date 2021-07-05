@@ -13,7 +13,12 @@
 #include <string>
 #include <vector>
 
+#include <llvm/ADT/StringRef.h>
 #include <llvm/Support/raw_ostream.h>
+
+namespace llvm {
+class Constant;
+}
 
 namespace rv {
 
@@ -39,7 +44,7 @@ public:
 
   void setAlignment(unsigned newAlignment) { alignment = newAlignment; }
   void setStride(int newStride) { hasConstantStride = true; stride = newStride; }
-  void setVarying(uint newAlignment) { hasConstantStride = false; alignment = newAlignment; }
+  void setVarying(unsigned newAlignment) { hasConstantStride = false; alignment = newAlignment; }
 
   bool isVarying() const { return defined && !hasConstantStride; }
   bool hasStridedShape() const { return defined && hasConstantStride; }
@@ -54,26 +59,37 @@ public:
   static inline VectorShape cont(int aligned = 1) { return strided(1, aligned); }
   static VectorShape undef() { return VectorShape(); } // bot
 
+  static VectorShape fromConstant(const llvm::Constant* C);
+
   static VectorShape join(VectorShape a, VectorShape b);
 
   bool operator==(const VectorShape &a) const;
   bool operator!=(const VectorShape &a) const;
-  bool operator<(const VectorShape &a) const;
 
-  static VectorShape truncateToTypeSize(const VectorShape &a,
-                                        unsigned typeSize) {
-    // FIXME can this become unaligned?
-    // This selects only the last typeSize digits
-    unsigned lastDigitsMask = (1U << typeSize) - 1U;
-    return VectorShape(a.getStride() & lastDigitsMask, a.alignment);
-  }
+  // lattice order
+  bool morePreciseThan(const VectorShape & a) const; // whether @this is less than @a according to lattice order
+  bool contains(const VectorShape & b) const; // whether join(@this, @b) == @this
+
+  friend VectorShape operator-(const VectorShape& a);
+  friend VectorShape operator+(const VectorShape& a, const VectorShape& b);
+  friend VectorShape operator-(const VectorShape& a, const VectorShape& b);
+  friend VectorShape operator*(int m, const VectorShape& a);
+  friend VectorShape truncateToTypeSize(const VectorShape &a, unsigned typeSize);
 
   std::string str() const;
+
+  static VectorShape truncateToTypeSize(const VectorShape &a,
+                                        unsigned typeSize);
 
   friend llvm::raw_ostream &operator<<(llvm::raw_ostream &O,
                                        const VectorShape &shape) {
     return O << shape.str();
   }
+
+  std::string serialize() const;
+  // parse the next shape in @text (starting from nextPos) and return the parsed shape
+  // (setting @nextPos on the next position after the last used character)
+  static VectorShape parse(llvm::StringRef text, int & nextPos);
 };
 
 typedef std::vector<VectorShape> VectorShapeVec;

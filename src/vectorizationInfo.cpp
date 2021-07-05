@@ -16,11 +16,17 @@
 #include <llvm/Analysis/LoopInfo.h>
 
 #include "rv/region/Region.h"
+#include "rvConfig.h"
 
 using namespace llvm;
 
 namespace rv
 {
+
+bool
+VectorizationInfo::inRegion(const BasicBlock & block) const {
+  return !region || region->contains(&block);
+}
 
 bool
 VectorizationInfo::inRegion(const Instruction & inst) const {
@@ -41,12 +47,16 @@ VectorizationInfo::remapPredicate(Value& dest, Value& old)
 
 void
 VectorizationInfo::dump(const Value * val) const {
-  llvm::raw_ostream & out = llvm::errs();
+  print(val, errs());
+}
+
+void
+VectorizationInfo::print(const Value * val, llvm::raw_ostream & out) const {
   if (!val) return;
 
   auto * block = dyn_cast<const BasicBlock>(val);
-  if (block) {
-    dumpBlockInfo(*block);
+  if (block && inRegion(*block)) {
+    printBlockInfo(*block, out);
   }
 
   if (hasKnownShape(*val)) {
@@ -58,79 +68,132 @@ VectorizationInfo::dump(const Value * val) const {
 
 void
 VectorizationInfo::dumpBlockInfo(const BasicBlock & block) const {
-  llvm::raw_ostream & out = llvm::errs();
+  printBlockInfo(block, errs());
+}
+
+void
+VectorizationInfo::printBlockInfo(const BasicBlock & block, llvm::raw_ostream & out) const {
   const Value * predicate = getPredicate(block);
 
-  out << "Block " << block.getName() << ", predicate ";
+  out << "Block ";
+  block.printAsOperand(out, false);
+  out << ", predicate ";
   if (predicate) out << *predicate; else out << "null";
   out << "\n";
 
   for (const Instruction & inst : block) {
-    dump(&inst);
+    print(&inst, out);
   }
   out << "\n";
 }
 
+void VectorizationInfo::dumpArguments() const {
+  printArguments(errs());
+}
+
+void VectorizationInfo::printArguments(llvm::raw_ostream & out) const {
+  const Function* F = mapping.scalarFn;
+
+  out << "\nArguments:\n";
+
+  for (auto& arg : F->args()) {
+    out << arg << " : " << (hasKnownShape(arg) ? getVectorShape(arg).str() : "missing") << "\n";
+  }
+
+  out << "\n";
+}
+
 void
-VectorizationInfo::dump() const
+VectorizationInfo::dump() const {
+  print(errs());
+}
+
+void
+VectorizationInfo::print(llvm::raw_ostream & out) const
 {
-    llvm::raw_ostream& out = llvm::errs();
     out << "VectorizationInfo ";
 
-    if (region)
-    {
-        out << " for Region ";
-        region->print(out);
-        out << "\n";
+    if (region) {
+        out << "for Region " << region->str() << "\n";
     }
-    else
-    {
-        out << " for function " << mapping.scalarFn->getName() << "\n";
+    else {
+        out << "for function " << mapping.scalarFn->getName() << "\n";
     }
 
+    printArguments(out);
+
     for (const BasicBlock & block : *mapping.scalarFn) {
-      dumpBlockInfo(block);
+      if (!inRegion(block)) continue;
+      printBlockInfo(block, out);
     }
 
     out << "}\n";
 }
 
-VectorizationInfo::VectorizationInfo(llvm::Function& parentFn, uint vectorWidth, Region& _region)
+VectorizationInfo::VectorizationInfo(llvm::Function& parentFn, unsigned vectorWidth, Region& _region)
 : mapping(&parentFn, &parentFn, vectorWidth), region(&_region)
 {
     mapping.resultShape = VectorShape::uni();
-    for (auto& arg : parentFn.getArgumentList()) {
-      (void) arg;
+    for (auto& arg : parentFn.args()) {
+      RV_UNUSED(arg);
       mapping.argShapes.push_back(VectorShape::uni());
     }
 }
 
 // VectorizationInfo
-VectorizationInfo::VectorizationInfo(VectorMapping _mapping)
-: mapping(_mapping), region(nullptr)
+VectorizationInfo::VectorizationInfo(Region & funcRegion, VectorMapping _mapping)
+: mapping(_mapping), region(&funcRegion)
 {
-  assert(mapping.argShapes.size() == mapping.scalarFn->getArgumentList().size());
-  auto& argList = mapping.scalarFn->getArgumentList();
-  auto it = argList.begin();
+  assert(mapping.argShapes.size() == mapping.scalarFn->arg_size());
+  auto it = mapping.scalarFn->arg_begin();
   for (auto argShape : mapping.argShapes)
   {
-    setVectorShape(*it, argShape);
+    auto & arg = *it;
+    setPinned(arg);
+    setVectorShape(arg, argShape);
     ++it;
   }
 }
 
 bool
-VectorizationInfo::hasKnownShape(const llvm::Value& val) const
-{
-    return (bool) shapes.count(&val);
+VectorizationInfo::hasKnownShape(const llvm::Value& val) const {
+
+  // explicit shape annotation take precedence
+    if ((bool) shapes.count(&val)) return true;
+
+  // in-region instruction must have an explicit shape
+    auto * inst = dyn_cast<Instruction>(&val);
+    if (inst && inRegion(*inst)) return false;
+
+  // out-of-region values default to uniform
+    return true;
 }
 
 VectorShape
 VectorizationInfo::getVectorShape(const llvm::Value& val) const
 {
     auto it = shapes.find(&val);
-    assert (it != shapes.end());
-    return it->second;
+
+  // give precedence to user shapes
+    if (it != shapes.end()) {
+      return it->second;
+    }
+
+ // return default shape for constants
+    auto * constVal = dyn_cast<Constant>(&val);
+    if (constVal) {
+      return VectorShape::fromConstant(constVal);
+    }
+
+
+  // out-of-region values default to uniform
+    auto * inst = dyn_cast<Instruction>(&val);
+    if (!inst || (inst && !inRegion(*inst))) {
+      return VectorShape::uni(); // TODO getAlignment(*inst));
+    }
+
+  // otw, the shape is undefined
+    return VectorShape::undef();
 }
 
 void
@@ -177,13 +240,11 @@ VectorizationInfo::setPredicate(const llvm::BasicBlock& block, llvm::Value& pred
 
 void
 VectorizationInfo::setLoopDivergence(const Loop & loop, bool toUniform) {
-  mDivergentLoops.erase(&loop);
-}
-
-void
-VectorizationInfo::setDivergentLoop(const Loop* loop)
-{
-    mDivergentLoops.insert(loop);
+  if (toUniform) {
+    mDivergentLoops.erase(&loop);
+  } else {
+    mDivergentLoops.insert(&loop);
+  }
 }
 
 bool
@@ -200,69 +261,33 @@ VectorizationInfo::isDivergentLoopTopLevel(const llvm::Loop* loop) const
     return isDivergentLoop(loop) && (!parent || !isDivergentLoop(parent));
 }
 
-
-void
-VectorizationInfo::markAlwaysByAll(const llvm::BasicBlock* BB)
-{
-    ABABlocks.insert(BB);
-}
-
-void
-VectorizationInfo::markAlwaysByAllOrNone(const llvm::BasicBlock* BB)
-{
-    ABAONBlocks.insert(BB);
-}
-
-void
-VectorizationInfo::markNotAlwaysByAll(const llvm::BasicBlock* BB)
-{
-    NotABABlocks.insert(BB);
-}
-
 bool
-VectorizationInfo::isAlwaysByAll(const llvm::BasicBlock* BB) const
-{
-    return (bool) ABABlocks.count(BB);
+VectorizationInfo::isKillExit(const BasicBlock& BB) const {
+    return NonKillExits.count(&BB) == 0;
 }
 
-bool
-VectorizationInfo::isAlwaysByAllOrNone(const llvm::BasicBlock* BB) const
-{
-    return (bool) ABAONBlocks.count(BB);
+bool VectorizationInfo::isPinned(const Value& V) const {
+  return pinned.count(&V) != 0;
 }
 
-bool
-VectorizationInfo::isNotAlwaysByAll(const llvm::BasicBlock* BB) const
-{
-    return (bool) NotABABlocks.count(BB);
+void VectorizationInfo::setPinned(const Value& V) {
+  pinned.insert(&V);
 }
 
 void
-VectorizationInfo::markMandatory(const BasicBlock* BB)
-{
-    MandatoryBlocks.insert(BB);
-}
-
-bool
-VectorizationInfo::isMandatory(const BasicBlock* BB) const
-{
-    return (bool) MandatoryBlocks.count(BB);
-}
-
-void
-VectorizationInfo::markMetadataMask(const Instruction* inst)
-{
-    MetadataMaskInsts.insert(inst);
-}
-
-bool
-VectorizationInfo::isMetadataMask(const Instruction* inst) const
-{
-    return (bool) MetadataMaskInsts.count(inst);
+VectorizationInfo::setNotKillExit(const BasicBlock* block) {
+    assert(block);
+    NonKillExits.insert(block);
 }
 
 LLVMContext &
 VectorizationInfo::getContext() const { return mapping.scalarFn->getContext(); }
+
+BasicBlock&
+VectorizationInfo::getEntry() const {
+   return region->getRegionEntry();
+ }
+
 
 } /* namespace rv */
 

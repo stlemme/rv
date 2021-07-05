@@ -11,6 +11,8 @@
 #include <llvm/IR/Dominators.h>
 #include "rv/region/LoopRegion.h"
 
+using namespace llvm;
+
 namespace rv {
 
 LoopRegion::LoopRegion(Loop & _loop)
@@ -41,6 +43,12 @@ LoopRegion::getEndingBlocks(llvm::SmallPtrSet<BasicBlock*, 2>& endingBlocks) con
     {
         endingBlocks.insert(endingBB);
     }
+}
+
+std::string
+LoopRegion::str() const {
+  auto loopHeaderName = loop.getHeader()->getName();
+  return ("LoopRegion (header " + loopHeaderName + ")").str();
 }
 
 } // namespace rv

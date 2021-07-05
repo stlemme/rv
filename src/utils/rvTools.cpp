@@ -25,7 +25,6 @@
 #include <llvm/Analysis/LoopInfo.h> // Loop
 #include <llvm/IR/CallSite.h>
 
-#include <llvm/Bitcode/ReaderWriter.h> // ParseBitcodeFile
 #include <llvm/Support/MemoryBuffer.h> // MemoryBuffer
 #include <llvm/IRReader/IRReader.h>
 #include <llvm/Support/SourceMgr.h>
@@ -34,15 +33,18 @@
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/Support/raw_ostream.h>
 
+#include "rv/utils.h"
 #include "rvConfig.h"
 
 using namespace llvm;
 
 
+namespace rv {
+
 // This function defines what we consider matching types
 // in terms of uniform/varying.
 bool
-rv::typesMatch(Type* t1, Type* t2)
+typesMatch(Type* t1, Type* t2)
 {
     assert (t1 && t2);
     if (t1 == t2) return true;
@@ -122,14 +124,25 @@ rv::typesMatch(Type* t1, Type* t2)
 }
 
 Module*
-rv::createModuleFromFile(const std::string & fileName, LLVMContext & context) {
+createModuleFromBuffer(const char buffer[], size_t length, LLVMContext & context) {
+  std::unique_ptr<MemoryBuffer> mb = MemoryBuffer::getMemBuffer(StringRef(buffer, length), "", false);
+  SMDiagnostic smDiag;
+  std::unique_ptr<Module> modPtr = parseIR(*mb, smDiag, context);
+  if (!modPtr) smDiag.print("rv::createModuleFromBuffer", errs());
+  mb.release();
+  return modPtr.release();
+}
+
+Module*
+createModuleFromFile(const std::string & fileName, LLVMContext & context) {
     SMDiagnostic smDiag;
     std::unique_ptr<Module> modPtr = parseIRFile(fileName, smDiag, context);
+    if (!modPtr) smDiag.print("rv::createModuleFromFile", errs());
     return modPtr.release();
 }
 
 void
-rv::writeModuleToFile(const Module& mod, const std::string& fileName)
+writeModuleToFile(const Module& mod, const std::string& fileName)
 {
     std::error_code EC;
     raw_fd_ostream file(fileName, EC, sys::fs::OpenFlags::F_RW);
@@ -142,7 +155,7 @@ rv::writeModuleToFile(const Module& mod, const std::string& fileName)
 }
 
 void
-rv::writeFunctionToFile(const Function& f, const std::string & fileName)
+writeFunctionToFile(const Function& f, const std::string & fileName)
 {
     std::error_code EC;
     raw_fd_ostream file(fileName, EC, sys::fs::OpenFlags::F_RW);
@@ -155,7 +168,7 @@ rv::writeFunctionToFile(const Function& f, const std::string & fileName)
 }
 
 void
-rv::getExitingBlocks(BasicBlock*                  exitBlock,
+getExitingBlocks(BasicBlock*                  exitBlock,
                       const LoopInfo&              loopInfo,
                       SmallVector<BasicBlock*, 2>& exitingBlocks)
 {
@@ -186,7 +199,7 @@ rv::getExitingBlocks(BasicBlock*                  exitBlock,
 }
 
 bool
-rv::returnsVoidPtr(const Instruction& inst)
+returnsVoidPtr(const Instruction& inst)
 {
     if (!isa<CastInst>(inst)) return false;
     if (!inst.getType()->isPointerTy()) return false;
@@ -196,7 +209,7 @@ rv::returnsVoidPtr(const Instruction& inst)
 
 // migrated over from llvm/Analysis/ValueTracker.cpp (release_38 version)
 unsigned
-rv::getBaseAlignment(const Value & V, const DataLayout &DL) {
+getBaseAlignment(const Value & V, const DataLayout &DL) {
   unsigned Align = 0;
   if (auto *GO = dyn_cast<GlobalObject>(&V)) {
     Align = GO->getAlignment();
@@ -226,7 +239,7 @@ rv::getBaseAlignment(const Value & V, const DataLayout &DL) {
   } else if (const AllocaInst *AI = dyn_cast<AllocaInst>(&V))
     Align = AI->getAlignment();
   else if (auto CS = ImmutableCallSite(&V))
-    Align = CS.getAttributes().getParamAlignment(AttributeSet::ReturnIndex);
+    Align = CS.getAttributes().getParamAlignment(AttributeList::ReturnIndex);
   else if (const LoadInst *LI = dyn_cast<LoadInst>(&V))
     if (MDNode *MD = LI->getMetadata(LLVMContext::MD_align)) {
       ConstantInt *CI = mdconst::extract<ConstantInt>(MD->getOperand(0));
@@ -235,3 +248,6 @@ rv::getBaseAlignment(const Value & V, const DataLayout &DL) {
 
   return Align;
 }
+
+
+} // namespace rv

@@ -15,194 +15,329 @@
 #include <llvm/IR/Dominators.h>
 #include <llvm/Analysis/PostDominators.h>
 #include <llvm/IR/Verifier.h>
-#include <rv/analysis/MandatoryAnalysis.h>
+#include <llvm/Analysis/MemoryDependenceAnalysis.h>
+#include <llvm/Analysis/BranchProbabilityInfo.h>
 
 #include "rv/rv.h"
-#include "rv/analysis/DFG.h"
 #include "rv/analysis/VectorizationAnalysis.h"
-#include "rv/analysis/maskAnalysis.h"
-#include "rv/transform/maskGenerator.h"
+#include "rv/intrinsics.h"
+
 #include "rv/transform/loopExitCanonicalizer.h"
-#include "rv/analysis/ABAAnalysis.h"
+#include "rv/transform/divLoopTrans.h"
 
 #include "rv/PlatformInfo.h"
 #include "rv/vectorizationInfo.h"
-#include "rv/analysis/DFG.h"
-#include "rv/analysis/maskAnalysis.h"
 #include "rv/analysis/reductionAnalysis.h"
 
 #include "rv/transform/Linearizer.h"
 
+#include "rv/transform/splitAllocas.h"
 #include "rv/transform/structOpt.h"
+#include "rv/transform/srovTransform.h"
+#include "rv/transform/irPolisher.h"
+#include "rv/transform/bosccTransform.h"
+#include "rv/transform/redOpt.h"
+#include "rv/transform/memCopyElision.h"
+#include "rv/transform/lowerDivergentSwitches.h"
 
-#include "native/nativeBackendPass.h"
 #include "native/NatBuilder.h"
 
 #include "utils/rvTools.h"
 
 #include "rvConfig.h"
+#include "report.h"
+
+#include "rv/transform/maskExpander.h"
+
+#include "rv/sleefLibrary.h"
 
 
-namespace {
-
-void removeTempFunction(Module& mod, const std::string& name)
-{
-    if (Function* tmpFn = mod.getFunction(name))
-    {
-        assert (tmpFn->use_empty());
-        tmpFn->eraseFromParent();
-    }
-}
-
-void
-removeUnusedRVLibFunctions(Module& mod)
-{
-#define REMOVE_LIB_FN(name) \
-    { \
-        Function* fn = mod.getFunction(#name); \
-        if (fn && fn->use_empty()) \
-        { \
-            fn->eraseFromParent(); \
-        } \
-    } \
-    ((void)0)
-
-    REMOVE_LIB_FN(log2_ps);
-    REMOVE_LIB_FN(exp2_ps);
-    REMOVE_LIB_FN(log_ps);
-    REMOVE_LIB_FN(exp_ps);
-    REMOVE_LIB_FN(sin_ps);
-    REMOVE_LIB_FN(cos_ps);
-    REMOVE_LIB_FN(sincos_ps);
-    REMOVE_LIB_FN(fabs_ps);
-    REMOVE_LIB_FN(pow_ps);
-    REMOVE_LIB_FN(log2256_ps);
-    REMOVE_LIB_FN(exp2256_ps);
-    REMOVE_LIB_FN(log256_ps);
-    REMOVE_LIB_FN(exp256_ps);
-    REMOVE_LIB_FN(sin256_ps);
-    REMOVE_LIB_FN(cos256_ps);
-    REMOVE_LIB_FN(sincos256_ps);
-    REMOVE_LIB_FN(fabs256_ps);
-    REMOVE_LIB_FN(pow256_ps);
-
-#undef REMOVE_LIB_FN
-}
-
-}
-
-
-
+using namespace llvm;
 
 namespace rv {
 
-VectorizerInterface::VectorizerInterface(PlatformInfo & _platInfo)
-        : platInfo(_platInfo)
+VectorizerInterface::VectorizerInterface(PlatformInfo & _platInfo, Config _config)
+        : config(_config)
+        , platInfo(_platInfo)
 {
   addIntrinsics();
 }
 
 void
 VectorizerInterface::addIntrinsics() {
-    for (Function & func : platInfo.getModule()) {
-        if (func.getName() == "rv_any" ||
-            func.getName() == "rv_all") {
-          VectorMapping mapping(
-            &func,
-            &func,
-            0, // no specific vector width
-            -1, //
-            VectorShape::uni(),
-            {VectorShape::varying()}
+  for (Function & func : platInfo.getModule()) {
+    switch (GetIntrinsicID(func)) {
+      case RVIntrinsic::Any:
+      case RVIntrinsic::All: {
+        VectorMapping mapping(
+          &func,
+          &func,
+          0, // no specific vector width
+          -1, //
+          VectorShape::uni(),
+          {VectorShape::varying()}
+        );
+        platInfo.addMapping(mapping);
+      } break;
+
+      case RVIntrinsic::Extract: {
+        VectorMapping mapping(
+          &func,
+          &func,
+          0, // no specific vector width
+          -1, //
+          VectorShape::uni(),
+          {VectorShape::varying(), VectorShape::uni()}
+        );
+        platInfo.addMapping(mapping);
+      } break;
+
+      case RVIntrinsic::Insert: {
+        VectorMapping mapping(
+          &func,
+          &func,
+          0, // no specific vector width
+          -1, //
+          VectorShape::varying(),
+          {VectorShape::varying(), VectorShape::uni(), VectorShape::uni()}
+        );
+        platInfo.addMapping(mapping);
+      } break;
+
+      case RVIntrinsic::VecLoad: {
+        VectorMapping mapping(
+          &func,
+          &func,
+          0, // no specific vector width
+          -1, //
+          VectorShape::uni(),
+          {VectorShape::varying(), VectorShape::uni()}
+        );
+        platInfo.addMapping(mapping);
+      } break;
+
+      case RVIntrinsic::VecStore: {
+        VectorMapping mapping(
+          &func,
+          &func,
+          0, // no specific vector width
+          -1, //
+          VectorShape::uni(),
+          {VectorShape::varying(), VectorShape::uni(), VectorShape::uni()}
+        );
+        platInfo.addMapping(mapping);
+      } break;
+
+      case RVIntrinsic::Shuffle: {
+        VectorMapping mapping(
+          &func,
+          &func,
+          0, // no specific vector width
+          -1, //
+          VectorShape::uni(),
+          {VectorShape::uni(), VectorShape::uni()}
+        );
+        platInfo.addMapping(mapping);
+      } break;
+
+      case RVIntrinsic::Ballot: {
+        VectorMapping mapping(
+          &func,
+          &func,
+          0, // no specific vector width
+          -1, //
+          VectorShape::uni(),
+          {VectorShape::varying()}
           );
-          platInfo.addSIMDMapping(mapping);
-        } else if (func.getName() == "rv_extract") {
-          VectorMapping mapping(
-            &func,
-            &func,
-            0, // no specific vector width
-            -1, //
-            VectorShape::uni(),
-            {VectorShape::varying(), VectorShape::uni()}
+        platInfo.addMapping(mapping);
+      } break;
+
+      case RVIntrinsic::PopCount: {
+        VectorMapping mapping(
+          &func,
+          &func,
+          0, // no specific vector width
+          -1, //
+          VectorShape::uni(),
+          {VectorShape::varying()}
           );
-          platInfo.addSIMDMapping(mapping);
-        } else if (func.getName() == "rv_ballot") {
-          VectorMapping mapping(
-            &func,
-            &func,
-            0, // no specific vector width
-            -1, //
-            VectorShape::uni(),
-            {VectorShape::varying(), VectorShape::varying()}
-            );
-          platInfo.addSIMDMapping(mapping);
-        }
+        platInfo.addMapping(mapping);
+      } break;
+
+      case RVIntrinsic::Index: {
+        VectorMapping mapping(
+          &func,
+          &func,
+          0, // no specific vector width
+          -1, //
+          VectorShape::varying(),
+          {VectorShape::varying()}
+          );
+        platInfo.addMapping(mapping);
+      } break;
+
+      case RVIntrinsic::Align: {
+        VectorMapping mapping(
+          &func,
+          &func,
+          0, // no specific vector width
+          -1, //
+          VectorShape::undef(),
+          {VectorShape::undef(), VectorShape::uni()}
+          );
+        platInfo.addMapping(mapping);
+      } break;
+      default: break;
     }
+  }
 }
+
+static void
+EmbedInlinedCode(BasicBlock & entry, Loop & hostLoop, LoopInfo & loopInfo, std::set<BasicBlock*> & funcBlocks) {
+  for (auto itSucc : successors(&entry)) {
+    auto & succ = *itSucc;
+
+    // block was newly inserted -> embed in loopInfo
+    if (funcBlocks.insert(&succ).second) {
+      hostLoop.addBasicBlockToLoop(&succ, loopInfo);
+      EmbedInlinedCode(succ, hostLoop, loopInfo, funcBlocks);
+    }
+  }
+}
+
+#define IF_DEBUG_CRT IF_DEBUG
+
+void
+VectorizerInterface::lowerRuntimeCalls(VectorizationInfo & vecInfo, LoopInfo & loopInfo)
+{
+  auto & scalarFn = vecInfo.getScalarFunction();
+  auto & mod = *scalarFn.getParent();
+
+  std::vector<CallInst*> callSites;
+
+  // blocks that are known to be in the function
+  std::set<BasicBlock*> funcBlocks;
+  for (auto & BB : scalarFn) {
+    funcBlocks.insert(&BB);
+  }
+
+  for (auto & BB : scalarFn) {
+    if (!vecInfo.inRegion(BB)) continue;
+
+    for (auto & Inst : BB) {
+      auto * call = dyn_cast<CallInst>(&Inst);
+      if (!call) continue;
+      auto * callee = dyn_cast<Function>(call->getCalledValue());
+      if (!callee) continue;
+      if (callee->isIntrinsic() || !callee->isDeclaration()) continue;
+
+      Function * implFunc = requestScalarImplementation(callee->getName(), *callee->getFunctionType(), mod);
+      IF_DEBUG_CRT { if (!implFunc) errs() << "CRT: could not find implementation for " << callee->getName() << "\n"; }
+
+      if (!implFunc) continue;
+
+      IF_DEBUG_CRT { errs() << "CRT: implementing " << callee->getName() << " with " << implFunc->getName() << "\n"; }
+
+      // replaced called function and prepare for inlining
+      auto itStart = callee->use_begin();
+      auto itEnd = callee->use_end();
+      for (auto itUse = itStart; itUse != itEnd; ) {
+        auto & userInst = *itUse->getUser();
+        itUse++;
+        auto * caller = dyn_cast<CallInst>(&userInst);
+        if (!caller) continue;
+        if (!vecInfo.inRegion(*caller->getParent())) continue;
+        callSites.push_back(caller);
+        caller->setCalledFunction(implFunc);
+      }
+    }
+  }
+
+  // TODO repair loopInfo
+
+  // FIXME this invalidates loop info and thus the region
+  for (auto * call : callSites) {
+    auto & entryBB = *call->getParent();
+    auto * hostLoop = loopInfo.getLoopFor(&entryBB);
+    InlineFunctionInfo IFI;
+    InlineFunction(call, IFI);
+
+    if (hostLoop) EmbedInlinedCode(entryBB, *hostLoop, loopInfo, funcBlocks);
+  }
+}
+
 
 void
 VectorizerInterface::analyze(VectorizationInfo& vecInfo,
-                             const CDG& cdg,
-                             const DFG& dfg,
-                             const LoopInfo& loopInfo,
+                             const DominatorTree & domTree,
                              const PostDominatorTree& postDomTree,
-                             const DominatorTree& domTree)
+                             const LoopInfo& loopInfo)
 {
-    VectorizationAnalysis vea(platInfo,
-                                  vecInfo,
-                                  cdg,
-                                  dfg,
-                                  loopInfo,
-                                  domTree, postDomTree);
+    IF_DEBUG {
+      errs() << "VA before analysis:\n";
+      vecInfo.dump();
+    }
 
-    MandatoryAnalysis man(vecInfo, loopInfo, cdg);
-
-    ABAAnalysis abaAnalysis(platInfo,
-                            vecInfo,
-                            loopInfo,
-                            postDomTree,
-                            domTree);
-
-    auto & scalarFn = vecInfo.getScalarFunction();
-    vea.analyze(scalarFn);
-  man.analyze(scalarFn);
-    abaAnalysis.analyze(scalarFn);
-
-}
-
-MaskAnalysis*
-VectorizerInterface::analyzeMasks(VectorizationInfo& vecInfo, const LoopInfo& loopinfo)
-{
-    MaskAnalysis* maskAnalysis = new MaskAnalysis(platInfo, vecInfo, loopinfo);
-    maskAnalysis->analyze(vecInfo.getScalarFunction());
-    return maskAnalysis;
+    // determines value and control shapes
+    VectorizationAnalysis vea(config, platInfo, vecInfo, domTree, postDomTree, loopInfo);
+    vea.analyze();
 }
 
 bool
-VectorizerInterface::generateMasks(VectorizationInfo& vecInfo,
-                                   MaskAnalysis& maskAnalysis,
-                                   const LoopInfo& loopInfo)
-{
-    MaskGenerator maskgenerator(vecInfo, maskAnalysis, loopInfo);
-    return maskgenerator.generate(vecInfo.getScalarFunction());
-}
-
-bool
-VectorizerInterface::linearizeCFG(VectorizationInfo& vecInfo,
-                                  MaskAnalysis& maskAnalysis,
-                                  LoopInfo& loopInfo,
-                                  DominatorTree& domTree)
+VectorizerInterface::linearize(VectorizationInfo& vecInfo,
+                 DominatorTree& domTree,
+                 PostDominatorTree& postDomTree,
+                 LoopInfo& loopInfo,
+                 BranchProbabilityInfo * pbInfo)
 {
     // use a fresh domtree here
-    DominatorTree fixedDomTree(vecInfo.getScalarFunction()); // FIXME someone upstream broke the domtree
+    // DominatorTree fixedDomTree(vecInfo.getScalarFunction()); // FIXME someone upstream broke the domtree
     domTree.recalculate(vecInfo.getScalarFunction());
-    Linearizer linearizer(vecInfo, maskAnalysis, fixedDomTree, loopInfo);
+
+    // early lowering of divergent switch statements
+    LowerDivergentSwitches divSwitchTrans(vecInfo, loopInfo);
+    if (divSwitchTrans.run()) {
+      postDomTree.recalculate(vecInfo.getScalarFunction()); // FIXME
+      domTree.recalculate(vecInfo.getScalarFunction()); // FIXME
+    }
+
+    // lazy mask generator
+    MaskExpander maskEx(vecInfo, domTree, postDomTree, loopInfo);
+
+    // convert divergent loops inside the region to uniform loops
+    DivLoopTrans divLoopTrans(platInfo, vecInfo, maskEx, domTree, loopInfo);
+    divLoopTrans.transformDivergentLoops();
+
+    postDomTree.recalculate(vecInfo.getScalarFunction()); // FIXME
+    domTree.recalculate(vecInfo.getScalarFunction()); // FIXME
+
+    // insert BOSCC branches if desired
+    if (config.enableHeuristicBOSCC) {
+      BOSCCTransform bosccTrans(vecInfo, platInfo, maskEx, domTree, postDomTree, loopInfo, pbInfo);
+      bosccTrans.run();
+    }
+    // expand masks after BOSCC
+    maskEx.expandRegionMasks();
+
+    postDomTree.recalculate(vecInfo.getScalarFunction()); // FIXME
+    domTree.recalculate(vecInfo.getScalarFunction()); // FIXME
 
     IF_DEBUG {
       errs() << "--- VecInfo before Linearizer ---\n";
       vecInfo.dump();
     }
 
+    // FIXME use external reduction analysis result (if available)
+    ReductionAnalysis reda(vecInfo.getScalarFunction(), loopInfo);
+    auto * hostLoop = loopInfo.getLoopFor(&vecInfo.getEntry());
+    if (hostLoop) reda.analyze(*hostLoop);
+
+    // optimize reduction data flow
+    ReductionOptimization redOpt(vecInfo, reda, domTree);
+    redOpt.run();
+
+    // partially linearize acyclic control in the region
+    Linearizer linearizer(vecInfo, maskEx, domTree, loopInfo);
     linearizer.run();
 
     IF_DEBUG {
@@ -213,25 +348,51 @@ VectorizerInterface::linearizeCFG(VectorizationInfo& vecInfo,
     return true;
 }
 
+// flag is set if the env var holds a string that starts on a non-'0' char
 bool
-VectorizerInterface::vectorize(VectorizationInfo &vecInfo, const DominatorTree &domTree, const LoopInfo & loopInfo)
-{
-  StructOpt sopt(vecInfo, platInfo.getDataLayout());
-  sopt.run();
+VectorizerInterface::vectorize(VectorizationInfo &vecInfo, DominatorTree &domTree, LoopInfo & loopInfo, ScalarEvolution & SE, MemoryDependenceResults & MDR, ValueToValueMapTy * vecInstMap) {
+  // divergent memcpy lowering
+  MemCopyElision mce(platInfo, vecInfo);
+  mce.run();
 
+  // split structural allocas
+  if (config.enableSplitAllocas) {
+    SplitAllocas split(vecInfo);
+    split.run();
+  } else {
+    Report() << "Split allocas opt disabled (RV_DISABLE_SPLITALLOCAS != 0)\n";
+  }
+
+  // transform allocas from Array-of-struct into Struct-of-vector where possibe
+  if (config.enableStructOpt) {
+    StructOpt sopt(vecInfo, platInfo.getDataLayout());
+    sopt.run();
+  } else {
+    Report() << "Struct opt disabled (RV_DISABLE_STRUCTOPT != 0)\n";
+  }
+
+  // Scalar-Replication-Of-Varying-(Aggregates): split up structs of vectorizable elements to promote use of vector registers
+  if (config.enableSROV) {
+    SROVTransform srovTransform(vecInfo, platInfo);
+    srovTransform.run();
+  } else {
+    Report() << "SROV opt disabled (RV_DISABLE_SROV != 0)\n";
+  }
+
+  auto * hostLoop = loopInfo.getLoopFor(&vecInfo.getEntry());
   ReductionAnalysis reda(vecInfo.getScalarFunction(), loopInfo);
-  reda.analyze();
+  if (hostLoop) reda.analyze(*hostLoop);
 
 // vectorize with native
-//    native::NatBuilder natBuilder(platInfo, vecInfo, domTree);
-//    natBuilder.vectorize();
-  legacy::FunctionPassManager fpm(vecInfo.getScalarFunction().getParent());
-  fpm.add(new MemoryDependenceAnalysis());
-  fpm.add(new ScalarEvolutionWrapperPass());
-  fpm.add(new NativeBackendPass(&vecInfo, &platInfo, &domTree, &reda));
-  fpm.doInitialization();
-  fpm.run(vecInfo.getScalarFunction());
-  fpm.doFinalization();
+  NatBuilder natBuilder(config, platInfo, vecInfo, domTree, MDR, SE, reda);
+  natBuilder.vectorize(true, vecInstMap);
+
+  // IR Polish phase: promote i1 vectors and perform early instruction (read: intrinsic) selection
+  if (config.enableIRPolish) {
+    IRPolisher polisher(vecInfo.getVectorFunction(), config);
+    polisher.polish();
+    Report() << "IR Polisher enabled (RV_ENABLE_POLISH != 0)\n";
+  }
 
   IF_DEBUG verifyFunction(vecInfo.getVectorFunction());
 
@@ -239,33 +400,8 @@ VectorizerInterface::vectorize(VectorizationInfo &vecInfo, const DominatorTree &
 }
 
 void
-VectorizerInterface::finalize(VectorizationInfo & vecInfo) {
-  const auto & scalarName = vecInfo.getScalarFunction().getName();
-  const auto & vecName = vecInfo.getVectorFunction().getName();
-
-  Function& finalFn = vecInfo.getVectorFunction();
-
-  assert (!finalFn.isDeclaration());
-
-  IF_DEBUG {
-    rv::writeFunctionToFile(finalFn, (finalFn.getName() + ".ll").str());
-  }
-  // Remove all functions that were linked in but are not used.
-  // TODO: This is a very bad temporary hack to get the "noise" project
-  //       running. We should add functions lazily.
-  removeUnusedRVLibFunctions(platInfo.getModule());
-
-  // Remove temporary functions if inserted during mask generation.
-  removeTempFunction(platInfo.getModule(), "entryMaskUseFn");
-  removeTempFunction(platInfo.getModule(), "entryMaskUseFnSIMD");
-
-  IF_DEBUG {
-    if (vecInfo.getRegion()) {
-      errs() << "### Region Vectorization in function '" << scalarName << "' SUCCESSFUL!\n";
-    } else {
-      errs() << "### Whole-Function Vectorization of function '" << scalarName << " into " << vecName << "' SUCCESSFUL!\n";
-    }
-  }
+VectorizerInterface::finalize() {
+  // TODO strip finalize
 }
 
 template <typename Impl>
@@ -274,25 +410,60 @@ static void lowerIntrinsicCall(CallInst* call, Impl impl) {
   call->eraseFromParent();
 }
 
-static void lowerIntrinsicCall(CallInst* call) {
-  auto * callee = call->getCalledFunction();
-  if (callee->getName() == "rv_any" ||
-      callee->getName() == "rv_all" ||
-      callee->getName() == "rv_extract") {
-    lowerIntrinsicCall(call, [] (const CallInst* call) {
-      return call->getOperand(0);
-    });
-  } else if (callee->getName() == "rv_ballot") {
+static void
+lowerIntrinsicCall(CallInst* call) {
+  switch (GetIntrinsicID(*call)) {
+    case RVIntrinsic::Any:
+    case RVIntrinsic::All:
+    case RVIntrinsic::Extract:
+    case RVIntrinsic::Shuffle:
+    case RVIntrinsic::Align: {
+      lowerIntrinsicCall(call, [] (const CallInst* call) {
+        return call->getOperand(0);
+      });
+    } break;
+
+    case RVIntrinsic::Insert: {
+      lowerIntrinsicCall(call, [] (const CallInst* call) {
+        return call->getOperand(2);
+      });
+    } break;
+
+    case RVIntrinsic::VecLoad: {
     lowerIntrinsicCall(call, [] (CallInst* call) {
+      IRBuilder<> builder(call);
+      auto * ptrTy = PointerType::get(builder.getFloatTy(), call->getOperand(0)->getType()->getPointerAddressSpace());
+      auto * ptrCast = builder.CreatePointerCast(call->getOperand(0), ptrTy);
+      auto * gep = builder.CreateGEP(ptrCast, { call->getOperand(1) });
+      return builder.CreateLoad(gep);
+    });
+                               } break;
+
+    case RVIntrinsic::VecStore: {
+    lowerIntrinsicCall(call, [] (CallInst* call) {
+      IRBuilder<> builder(call);
+      auto * ptrTy = PointerType::get(builder.getFloatTy(), call->getOperand(0)->getType()->getPointerAddressSpace());
+      auto * ptrCast = builder.CreatePointerCast(call->getOperand(0), ptrTy);
+      auto * gep = builder.CreateGEP(ptrCast, { call->getOperand(1) });
+      return builder.CreateStore(call->getOperand(2), gep);
+    });
+  } break;
+
+    case RVIntrinsic::Ballot:
+    case RVIntrinsic::PopCount: {
+      lowerIntrinsicCall(call, [] (CallInst* call) {
         IRBuilder<> builder(call);
         return builder.CreateZExt(call->getOperand(0), builder.getInt32Ty());
       });
+    } break;
+  default: break;
   }
 }
 
 void
 lowerIntrinsics(Module & mod) {
-  const char* names[] = {"rv_any", "rv_all", "rv_extract", "rv_ballot"};
+  // TODO re-implement using RVIntrinsic enum
+  const char* names[] = {"rv_any", "rv_all", "rv_extract", "rv_insert", "rv_load", "rv_store", "rv_shuffle", "rv_ballot", "rv_align"};
   for (int i = 0, n = sizeof(names) / sizeof(names[0]); i < n; i++) {
     auto func = mod.getFunction(names[i]);
     if (!func) continue;

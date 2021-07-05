@@ -1,11 +1,10 @@
 *.ninja
-*.ll
 **/*.o
 **/*.swp
+lib
 
 **/*.bc
 **/*.so
-test*.ll
 *.cbp
 
 cmake_install.cmake
@@ -23,3 +22,9 @@ bin/**
 clang_complete
 
 amd/*
+
+vecmath/sleef/**/rename*.h
+mkrename
+sleef.h
+
+*.csv
